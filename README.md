@@ -1,4 +1,4 @@
-# acordate
+# Taskify V1!
 
 Nuestro proyecto bro
 ## Getting Started
