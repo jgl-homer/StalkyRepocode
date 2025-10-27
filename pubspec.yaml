@@ -1,11 +1,15 @@
-name: taskingcheck
+# Archivo: pubspec.yaml
+
+name: Taskify # Nombre de la aplicación cambiado de 'taskingcheck' a 'taskify'
 description: "App Flutter con login usando Firebase"
 publish_to: 'none'
 
 version: 1.0.0+1
 
 environment:
-  sdk: ">=3.9.2 <4.0.0"
+  # Se ajustó el SDK a una versión estándar y moderna de Dart.
+  # Revisa tu versión de Dart instalada si hay problemas.
+  sdk: ">=3.0.0 <4.0.0" 
 
 dependencies:
   flutter:
@@ -18,15 +22,15 @@ dependencies:
   firebase_auth: ^6.1.1
   cloud_firestore: ^6.0.3
   firebase_storage: ^13.0.3
-  firebase_messaging: ^16.0.0 # Aunque ya lo tienes, la usaremos para notificaciones avanzadas
+  firebase_messaging: ^16.0.0
   image_picker: ^1.2.0
 
   # 🚀 NUEVOS: Para Notificaciones Locales y Fechas 🚀
-  flutter_local_notifications: ^19.5.0 # Necesario para programar notificaciones en el dispositivo
-  timezone: ^0.10.1                      # Necesario para manejar la zona horaria para notificaciones exactas
+  flutter_local_notifications: ^19.5.0 
+  timezone: ^0.10.1 
   firebase_app_check: ^0.4.1+1
-  intl: ^0.20.2
-
+  intl: ^0.20.2 # Necesario para el formato de fecha/hora en dashboard.dart
+  flutter_rating_bar: ^4.0.1
 
 dev_dependencies:
   flutter_test:
@@ -37,11 +41,13 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  # Assets (si tienes)
-  # assets:
-  #   - assets/
+  # 🖼️ SECCIÓN DE ASSETS: DESCOMENTADA Y CONFIGURADA
+  # Esta línea es CLAVE para que Flutter encuentre tu logo en dashboard.dart
+  assets:
+    - assets/logo/ 
 
 flutter_icons:
   android: true
   ios: true
+  # 🔑 Ruta del ícono para el lanzador (Icono principal de la app)
   image_path: "assets/icon/icono.png"

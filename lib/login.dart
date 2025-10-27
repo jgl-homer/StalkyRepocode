@@ -1,10 +1,10 @@
-// Archivo: lib/login.dart
+// Archivo: lib/login.dart (FINAL CON ÍCONO EN LA ESQUINA DEL CONTENEDOR)
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'register.dart';
 import 'dashboard.dart';
-// 🚀 Nueva Importación
+import 'fcm_service.dart'; // 🚀 IMPORTACIÓN NECESARIA PARA LA FUNCIÓN
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -18,12 +18,18 @@ class _LoginPageState extends State<LoginPage> {
   String _email = '';
   String _password = '';
   String? _error;
+  bool _isLoading = false;
 
   // Login con email y contraseña
   Future<void> _tryLogin() async {
     final isValid = _formKey.currentState?.validate() ?? false;
     if (!isValid) return;
     _formKey.currentState?.save();
+
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
 
     try {
       final userCredential = await FirebaseAuth.instance
@@ -32,40 +38,45 @@ class _LoginPageState extends State<LoginPage> {
       final user = userCredential.user;
 
       if (user != null) {
-        // 🔑 PASO CLAVE: Forzar la recarga de los datos para ver el estado de verificación actual
         await user.reload();
 
-        // 🔑 Verificar si el correo está confirmado
         if (!user.emailVerified) {
-          // Si no está verificado, mostrar error y bloquear
           setState(
             () => _error =
                 'Debes verificar tu correo para acceder. Revisa tu bandeja de entrada.',
           );
 
-          // Reenviar verificación (opcional, ayuda al usuario)
           await user.sendEmailVerification();
-
-          // Cerrar sesión localmente para obligar a pasar por la verificación de nuevo
           await FirebaseAuth.instance.signOut();
+          return;
+        }
 
-          return; // Detener la función aquí
+        // Se asume que saveFCMToken() está definido en fcm_service.dart
+        // ignore: todo
+        // TODO: Descomenta la siguiente línea si la función existe y es necesaria.
+        // await saveFCMToken();
+
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const DashboardPage()),
+          );
         }
       }
-
-      // Si llega aquí, está logueado y verificado
-      setState(() => _error = null);
-
-      // Si usas el StreamBuilder en main.dart, esta navegación ya no es necesaria,
-      // pero la mantendremos para consistencia si no estás usando el main.dart modificado.
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const DashboardPage()),
-        );
-      }
     } on FirebaseAuthException catch (e) {
-      setState(() => _error = e.message);
+      setState(() {
+        if (e.code == 'user-not-found' || e.code == 'wrong-password') {
+          _error = 'Credenciales incorrectas.';
+        } else {
+          _error = e.message;
+        }
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -79,10 +90,12 @@ class _LoginPageState extends State<LoginPage> {
     }
     try {
       await FirebaseAuth.instance.sendPasswordResetEmail(email: _email);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Correo de recuperación enviado')),
-      );
-      setState(() => _error = null);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Correo de recuperación enviado')),
+        );
+        setState(() => _error = null);
+      }
     } on FirebaseAuthException catch (e) {
       setState(() => _error = e.message);
     }
@@ -90,7 +103,29 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Estilo de input unificado
+    const inputDecorationStyle = InputDecoration(
+      filled: true,
+      fillColor: Color.fromRGBO(255, 255, 255, 0.1),
+      contentPadding: EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(10)),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(10)),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(10)),
+        borderSide: BorderSide(color: Colors.cyanAccent, width: 2),
+      ),
+      floatingLabelBehavior: FloatingLabelBehavior.never,
+      labelStyle: TextStyle(color: Colors.white70, fontSize: 16),
+    );
+
     return Scaffold(
+      // 💡 Eliminamos el AppBar y colocamos todo en el body
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -104,122 +139,158 @@ class _LoginPageState extends State<LoginPage> {
           ),
         ),
         child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.lock_outline, size: 80, color: Colors.white70),
-                const SizedBox(height: 20),
-                const Text(
-                  'Iniciar Sesión',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
+          // 💡 El SingleChildScrollView simulará la tarjeta
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 400),
+            margin: const EdgeInsets.all(24),
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 40),
+            decoration: BoxDecoration(
+              color:
+                  Colors.black.withOpacity(0.5), // Fondo de la "tarjeta" oscura
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: SingleChildScrollView(
+              child: Stack(
+                // Usamos Stack para posicionar el ícono en la esquina
+                children: [
+                  // 1. Ícono de la App en la esquina superior derecha
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    child: Image.asset(
+                      'assets/logo/icon.png', // 🚀 Tu logo de la app
+                      height: 25,
+                      width: 25,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 30),
-                if (_error != null) ...[
-                  Text(
-                    _error!,
-                    style: const TextStyle(color: Colors.redAccent),
-                  ),
-                  const SizedBox(height: 20),
-                ],
-                Form(
-                  key: _formKey,
-                  child: Column(
+
+                  // 2. Contenido principal (centrado)
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      TextFormField(
-                        style: const TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
-                          labelText: 'Correo',
-                          labelStyle: const TextStyle(color: Colors.white70),
-                          filled: true,
-                          fillColor: Colors.black.withOpacity(0.3),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
+                      // 🔑 ÍCONO DE CANDADO GRANDE (similar a la imagen)
+                      const Icon(Icons.lock_open,
+                          size: 60, color: Colors.white),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'Bienvenido',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
                         ),
-                        keyboardType: TextInputType.emailAddress,
-                        validator: (v) {
-                          if (v == null || v.trim().isEmpty) {
-                            return 'El correo es obligatorio';
-                          }
-                          final emailRegExp = RegExp(
-                            r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$",
-                          );
-                          if (!emailRegExp.hasMatch(v.trim())) {
-                            return 'Correo inválido';
-                          }
-                          return null;
-                        },
-                        onSaved: (v) => _email = v!.trim(),
                       ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        style: const TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
-                          labelText: 'Contraseña',
-                          labelStyle: const TextStyle(color: Colors.white70),
-                          filled: true,
-                          fillColor: Colors.black.withOpacity(0.3),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
+                      const Text(
+                        'Iniciar Sesión', // Muestra la acción (opcional)
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w400,
+                          color: Colors.white70,
                         ),
-                        obscureText: true,
-                        validator: (v) => (v == null || v.length < 6)
-                            ? 'Mínimo 6 caracteres'
-                            : null,
-                        onSaved: (v) => _password = v!,
                       ),
                       const SizedBox(height: 30),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.cyanAccent,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 40,
-                            vertical: 15,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
+                      if (_error != null) ...[
+                        Text(
+                          _error!,
+                          style: const TextStyle(color: Colors.redAccent),
                         ),
-                        onPressed: _tryLogin,
-                        child: const Text(
-                          'Entrar',
-                          style: TextStyle(fontSize: 18, color: Colors.black),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      TextButton(
-                        onPressed: _resetPassword,
-                        child: const Text(
-                          '¿Olvidaste tu contraseña?',
-                          style: TextStyle(color: Colors.white70),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      TextButton(
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const RegisterPage(),
-                          ),
-                        ),
-                        child: const Text(
-                          'Crear cuenta',
-                          style: TextStyle(color: Colors.white70),
+                        const SizedBox(height: 20),
+                      ],
+                      Form(
+                        key: _formKey,
+                        child: Column(
+                          children: [
+                            // CAMPO CORREO
+                            TextFormField(
+                              style: const TextStyle(color: Colors.white),
+                              decoration: inputDecorationStyle.copyWith(
+                                labelText: 'Correo electrónico',
+                                prefixIcon: const Icon(Icons.mail_outline,
+                                    color: Colors.white70),
+                              ),
+                              keyboardType: TextInputType.emailAddress,
+                              validator: (v) {
+                                if (v == null || v.trim().isEmpty) {
+                                  return 'El correo es obligatorio';
+                                }
+                                final emailRegExp = RegExp(
+                                  r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$",
+                                );
+                                if (!emailRegExp.hasMatch(v.trim())) {
+                                  return 'Correo inválido';
+                                }
+                                return null;
+                              },
+                              onSaved: (v) => _email = v!.trim(),
+                            ),
+                            const SizedBox(height: 16),
+                            // CAMPO CONTRASEÑA
+                            TextFormField(
+                              style: const TextStyle(color: Colors.white),
+                              decoration: inputDecorationStyle.copyWith(
+                                labelText: 'Contraseña',
+                                prefixIcon: const Icon(Icons.lock_outline,
+                                    color: Colors.white70),
+                              ),
+                              obscureText: true,
+                              validator: (v) => (v == null || v.length < 6)
+                                  ? 'Mínimo 6 caracteres'
+                                  : null,
+                              onSaved: (v) => _password = v!,
+                            ),
+                            const SizedBox(height: 30),
+                            // Botón de Entrar
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors
+                                    .amber, // Botón amarillo como en la imagen
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 40,
+                                  vertical: 15,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(30),
+                                ),
+                              ),
+                              onPressed: _isLoading ? null : _tryLogin,
+                              child: _isLoading
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.black,
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Text(
+                                      'Entrar',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        color: Colors.black,
+                                      ),
+                                    ),
+                            ),
+                            const SizedBox(height: 10),
+                            TextButton(
+                              onPressed: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const RegisterPage(),
+                                ),
+                              ),
+                              child: const Text(
+                                'Crear cuenta nueva', // Texto similar a la imagen
+                                style: TextStyle(color: Colors.white70),
+                              ),
+                            ),
+                            // Se elimina el TextButton de '¿Olvidaste tu contraseña?' para simplificar y acercarnos a la imagen.
+                          ],
                         ),
                       ),
                     ],
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

@@ -1,8 +1,9 @@
+// Archivo: lib/services/notification_service.dart
+
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 class NotificationService {
-  // Patrón Singleton para una única instancia del servicio
   static final NotificationService _notificationService =
       NotificationService._internal();
 
@@ -10,16 +11,16 @@ class NotificationService {
     return _notificationService;
   }
 
-  // Constructor interno privado para el Singleton
-  NotificationService._internal();
+  NotificationService._internal() {
+    // La inicialización de la zona horaria ahora se hace en main.dart para mayor seguridad
+  }
 
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
 
-  // 🔑 Inicialización de la configuración
   Future<void> initNotifications() async {
     const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('@mipmap/ic_launcher'); // Ícono de tu app
+        AndroidInitializationSettings('@mipmap/ic_launcher');
 
     const DarwinInitializationSettings initializationSettingsIOS =
         DarwinInitializationSettings(
@@ -34,29 +35,28 @@ class NotificationService {
           iOS: initializationSettingsIOS,
         );
 
-    // Inicializa el plugin
     await flutterLocalNotificationsPlugin.initialize(initializationSettings);
   }
 
-  // ⏰ Función para PROGRAMAR la notificación en una hora específica
+  // 🚀 MÉTODO PRINCIPAL: Programa UNA SOLA Notificación (Sin Recurrencia)
   Future<void> scheduleNotification(
     int id,
     String title,
     String body,
     DateTime scheduledDate,
   ) async {
-    // 1. Convierte DateTime a TZDateTime para la programación
+    // Convertir a TZDateTime usando la zona horaria local
     final tz.TZDateTime scheduledTime = tz.TZDateTime.from(
       scheduledDate,
-      tz.local, // Usa la zona horaria local del dispositivo
+      tz.local,
     );
 
-    // 2. Verifica que la hora sea FUTURA
+    // 🛑 Cancelar si la hora ya pasó (una alarma única debe ser en el futuro)
     if (scheduledTime.isBefore(tz.TZDateTime.now(tz.local))) {
-      // No programes notificaciones para el pasado
       return;
     }
 
+    // 🔑 NO se usa matchDateTimeComponents. La repetición la hace add_task_page.dart
     await flutterLocalNotificationsPlugin.zonedSchedule(
       id,
       title,
@@ -64,7 +64,7 @@ class NotificationService {
       scheduledTime,
       const NotificationDetails(
         android: AndroidNotificationDetails(
-          'task_channel_id', // ID único del canal
+          'task_channel_id',
           'Recordatorios de Tareas',
           channelDescription:
               'Canal para las notificaciones programadas de tareas.',
@@ -73,13 +73,43 @@ class NotificationService {
         ),
         iOS: DarwinNotificationDetails(),
       ),
-      // Parámetros eliminados: uiLocalNotificationDateInterpretation ya no es necesario
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      matchDateTimeComponents: DateTimeComponents.time,
     );
   }
 
-  // ❌ Función para CANCELAR todas las notificaciones
+  Future<void> cancelNotification(int id) async {
+    await flutterLocalNotificationsPlugin.cancel(id);
+  }
+
+  Future<void> showNotification({
+    required int id,
+    required String? title,
+    required String? body,
+    String? payload,
+  }) async {
+    const AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
+          'task_channel_id',
+          'Recordatorios de Tareas',
+          channelDescription:
+              'Canal para notificaciones inmediatas y de Firebase.',
+          importance: Importance.max,
+          priority: Priority.high,
+        );
+
+    const NotificationDetails platformDetails = NotificationDetails(
+      android: androidDetails,
+    );
+
+    await flutterLocalNotificationsPlugin.show(
+      id,
+      title,
+      body,
+      platformDetails,
+      payload: payload,
+    );
+  }
+
   Future<void> cancelAllNotifications() async {
     await flutterLocalNotificationsPlugin.cancelAll();
   }

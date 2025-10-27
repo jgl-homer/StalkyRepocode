@@ -3,7 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'add_task_page.dart';
 import 'profile.dart';
-import 'edit_task_page.dart'; // 🔑 Importación necesaria para la función de edición
+import 'edit_task_page.dart';
+import 'package:intl/intl.dart'; // Añadido para formato de fecha/hora
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -25,15 +26,13 @@ class _DashboardPageState extends State<DashboardPage> {
           .collection('users')
           .doc(user.uid)
           .collection('tasks')
-          .doc(docId) // Usa el ID del documento para eliminarlo
+          .doc(docId)
           .delete();
 
-      // Opcional: Mostrar una confirmación
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Tarea eliminada con éxito')),
       );
     } catch (e) {
-      // Manejo de errores (incluyendo posibles rechazos de App Check, aunque ya debe estar resuelto)
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Error al eliminar: $e')));
@@ -45,13 +44,10 @@ class _DashboardPageState extends State<DashboardPage> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => EditTaskPage(
-          // Navegación real a la página de edición
-          taskId: docId,
-          initialData: currentTaskData,
-        ),
+        builder: (context) =>
+            EditTaskPage(taskId: docId, initialData: currentTaskData),
       ),
-    ).then((_) => setState(() {})); // Refresca la lista al volver de la edición
+    ).then((_) => setState(() {}));
   }
 
   @override
@@ -74,8 +70,20 @@ class _DashboardPageState extends State<DashboardPage> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text('TaskingCheck'),
+        title: const Text('Taskify'),
         backgroundColor: Colors.black,
+        // 🚀 AÑADIR EL ÍCONO A LA DERECHA
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 15.0),
+            child: Image.asset(
+              // Asegúrate de crear la carpeta assets/logo y el archivo
+              'assets/logo/icon.png',
+              height: 32,
+              width: 32,
+            ),
+          ),
+        ],
       ),
       body: screens[_selectedIndex],
       floatingActionButton: _selectedIndex == 0
@@ -85,7 +93,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => const AddTaskPage()),
-                ).then((_) => setState(() {})); // refrescar al volver
+                ).then((_) => setState(() {}));
               },
               child: const Icon(Icons.add, color: Colors.black),
             )
@@ -140,14 +148,18 @@ class _DashboardPageState extends State<DashboardPage> {
           padding: const EdgeInsets.all(12),
           itemCount: tasks.length,
           itemBuilder: (context, index) {
-            final docId = tasks[index].id; // 🔑 Obtenemos el ID del documento
+            final docId = tasks[index].id;
             final task = tasks[index].data() as Map<String, dynamic>;
             final title = task['title'] ?? 'Sin título';
             final priority = task['priority'] ?? 'media';
 
             DateTime? dueDate;
+            String dueDateFormatted = '';
             if (task['dueDate'] != null && task['dueDate'] is Timestamp) {
               dueDate = (task['dueDate'] as Timestamp).toDate();
+              dueDateFormatted = DateFormat(
+                'dd/MM/yyyy h:mm a',
+              ).format(dueDate);
             }
 
             Color priorityColor;
@@ -167,7 +179,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
             // 🗑️ IMPLEMENTACIÓN DE DISMISSIBLE PARA ELIMINAR (SWIPE)
             return Dismissible(
-              key: Key(docId), // Clave única para el widget Dismissible
+              key: Key(docId),
               direction: DismissDirection.endToStart,
               background: Container(
                 color: Colors.red,
@@ -202,7 +214,6 @@ class _DashboardPageState extends State<DashboardPage> {
                 );
               },
               onDismissed: (direction) {
-                // Llamamos a la función de eliminación de Firestore
                 _deleteTask(docId);
               },
               child: Card(
@@ -212,9 +223,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: ListTile(
-                  // 📝 IMPLEMENTACIÓN DE ONTAP PARA EDITAR
-                  onTap: () =>
-                      _editTask(docId, task), // Llama a la función de edición
+                  onTap: () => _editTask(docId, task),
                   title: Text(
                     title,
                     style: const TextStyle(
@@ -225,7 +234,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   ),
                   subtitle: dueDate != null
                       ? Text(
-                          'Vence: ${dueDate.day}/${dueDate.month}/${dueDate.year} a las ${dueDate.hour}:${dueDate.minute.toString().padLeft(2, '0')}',
+                          'Vence: $dueDateFormatted',
                           style: const TextStyle(color: Colors.white70),
                         )
                       : const Text(

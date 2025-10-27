@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:intl/intl.dart'; // Asegúrate de tener el paquete 'intl' en tu pubspec.yaml
+import 'package:intl/intl.dart';
+// 💡 CORRECCIÓN DE IMPORTACIÓN: Usar la ruta relativa para archivos locales
+import 'services/notification_service.dart';
 
 class EditTaskPage extends StatefulWidget {
   final String taskId;
@@ -22,16 +24,17 @@ class _EditTaskPageState extends State<EditTaskPage> {
   late String _selectedPriority;
   late DateTime? _selectedDueDate;
 
+  // 💡 Instancia del servicio de notificaciones
+  final NotificationService _notificationService = NotificationService();
+
   @override
   void initState() {
     super.initState();
-    // 1. Inicializa los controladores con los datos existentes
     _titleController = TextEditingController(
       text: widget.initialData['title'] ?? '',
     );
     _selectedPriority = widget.initialData['priority'] ?? 'media';
 
-    // 2. Convierte Timestamp a DateTime para la interfaz
     if (widget.initialData['dueDate'] != null &&
         widget.initialData['dueDate'] is Timestamp) {
       _selectedDueDate = (widget.initialData['dueDate'] as Timestamp).toDate();
@@ -40,9 +43,8 @@ class _EditTaskPageState extends State<EditTaskPage> {
     }
   }
 
-  // LÓGICA PARA SELECCIONAR FECHA Y HORA
+  // Selector combinado de Fecha y Hora
   Future<void> _selectDateTime(BuildContext context) async {
-    // 3. Selección de Fecha
     final DateTime? date = await showDatePicker(
       context: context,
       initialDate:
@@ -63,7 +65,6 @@ class _EditTaskPageState extends State<EditTaskPage> {
     );
 
     if (date != null) {
-      // 4. Selección de Hora
       final TimeOfDay? time = await showTimePicker(
         context: context,
         initialTime: TimeOfDay.fromDateTime(_selectedDueDate ?? DateTime.now()),
@@ -94,30 +95,58 @@ class _EditTaskPageState extends State<EditTaskPage> {
     }
   }
 
-  // 💾 LÓGICA PARA ACTUALIZAR LA TAREA EN FIRESTORE
   Future<void> _updateTask() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null || _titleController.text.trim().isEmpty) return;
 
+    // Generamos el ID de notificación basado en el ID del documento
+    final int notificationId = widget.taskId.hashCode.abs() % 1000000;
+
+    final dataToUpdate = {
+      'title': _titleController.text.trim(),
+      'priority': _selectedPriority,
+      'dueDate': _selectedDueDate != null
+          ? Timestamp.fromDate(_selectedDueDate!)
+          : null,
+    };
+
     try {
+      // 1. Actualización en Firestore
       await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .collection('tasks')
           .doc(widget.taskId)
-          .update({
-            'title': _titleController.text.trim(),
-            'priority': _selectedPriority,
-            'dueDate':
-                _selectedDueDate, // Firestore acepta DateTime directamente
-          });
+          .update(dataToUpdate);
 
-      // Si tiene éxito, cierra la página y regresa al Dashboard
-      Navigator.pop(context);
+      // 2. CANCELAR NOTIFICACIÓN ANTIGUA (importante para evitar duplicados)
+      await _notificationService.cancelNotification(notificationId);
+
+      // 3. PROGRAMAR NUEVA NOTIFICACIÓN (si hay fecha de vencimiento válida)
+      if (_selectedDueDate != null) {
+        final reminderTime = _selectedDueDate!.subtract(
+          const Duration(hours: 1),
+        );
+
+        if (reminderTime.isAfter(DateTime.now())) {
+          await _notificationService.scheduleNotification(
+            notificationId,
+            '🔄 Tarea Modificada: ${_titleController.text.trim()}',
+            '¡Tu tarea de prioridad ${_selectedPriority.toUpperCase()} vence en 1 hora!',
+            reminderTime,
+          );
+        }
+      }
+
+      // 💡 CORRECCIÓN LINT: Usar if (mounted)
+      if (mounted) Navigator.pop(context);
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error al actualizar: $e')));
+      // 💡 CORRECCIÓN LINT: Usar if (mounted)
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error al actualizar: $e')));
+      }
     }
   }
 
@@ -136,7 +165,7 @@ class _EditTaskPageState extends State<EditTaskPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // CAMPO 1: Título (Texto)
+              // Campo de Título
               TextField(
                 controller: _titleController,
                 style: const TextStyle(color: Colors.white),
@@ -150,7 +179,7 @@ class _EditTaskPageState extends State<EditTaskPage> {
               ),
               const SizedBox(height: 30),
 
-              // CAMPO 2: Prioridad (Dropdown)
+              // Selector de Prioridad
               const Text(
                 'Prioridad:',
                 style: TextStyle(color: Colors.white70, fontSize: 16),
@@ -179,14 +208,13 @@ class _EditTaskPageState extends State<EditTaskPage> {
               ),
               const SizedBox(height: 30),
 
-              // CAMPO 3: Fecha y Hora (Selector)
+              // Selector de Fecha
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
                     _selectedDueDate == null
                         ? 'Sin fecha de vencimiento'
-                        // Formatea la fecha y hora seleccionada
                         : 'Vence: ${DateFormat('dd/MM/yyyy HH:mm').format(_selectedDueDate!)}',
                     style: const TextStyle(color: Colors.white70, fontSize: 16),
                   ),
