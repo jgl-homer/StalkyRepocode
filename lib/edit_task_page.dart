@@ -24,6 +24,9 @@ class _EditTaskPageState extends State<EditTaskPage> {
   late String _selectedPriority;
   late DateTime? _selectedDueDate;
 
+  // 💡 ESTADO NUEVO: Bandera para controlar la doble pulsación
+  bool _isSaving = false;
+
   // 💡 Instancia del servicio de notificaciones
   final NotificationService _notificationService = NotificationService();
 
@@ -43,13 +46,17 @@ class _EditTaskPageState extends State<EditTaskPage> {
     }
   }
 
-  // Selector combinado de Fecha y Hora
+  // Selector combinado de Fecha y Hora (CORREGIDO)
   Future<void> _selectDateTime(BuildContext context) async {
+    final DateTime now = DateTime.now();
+    // No permitir seleccionar fechas anteriores al inicio del día actual
+    final DateTime todayStart = DateTime(now.year, now.month, now.day);
+
     final DateTime? date = await showDatePicker(
       context: context,
-      initialDate:
-          _selectedDueDate ?? DateTime.now().add(const Duration(hours: 1)),
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      initialDate: _selectedDueDate ?? now,
+      // 💡 CORRECCIÓN: No permitir fechas pasadas
+      firstDate: todayStart,
       lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
       builder: (context, child) {
         return Theme(
@@ -65,9 +72,22 @@ class _EditTaskPageState extends State<EditTaskPage> {
     );
 
     if (date != null) {
+      TimeOfDay initialTime;
+
+      // Si la fecha seleccionada es HOY, la hora inicial debe ser la hora actual
+      if (date.year == now.year &&
+          date.month == now.month &&
+          date.day == now.day) {
+        initialTime = TimeOfDay.fromDateTime(now);
+      } else {
+        // Para días futuros, usar la hora que ya estaba seleccionada o la hora actual
+        initialTime = TimeOfDay.fromDateTime(_selectedDueDate ?? now);
+      }
+
       final TimeOfDay? time = await showTimePicker(
         context: context,
-        initialTime: TimeOfDay.fromDateTime(_selectedDueDate ?? DateTime.now()),
+        // 💡 CORRECCIÓN: Usar la hora inicial ajustada para hoy.
+        initialTime: initialTime,
         builder: (context, child) {
           return Theme(
             data: ThemeData.dark().copyWith(
@@ -82,22 +102,50 @@ class _EditTaskPageState extends State<EditTaskPage> {
       );
 
       if (time != null) {
+        final DateTime newDueDate = DateTime(
+          date.year,
+          date.month,
+          date.day,
+          time.hour,
+          time.minute,
+        );
+
+        // 💡 VERIFICACIÓN FINAL: Asegurarse de que el momento combinado no sea pasado.
+        if (newDueDate.isBefore(now)) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                  content: Text(
+                      'La fecha y hora de vencimiento no puede ser en el pasado.')),
+            );
+          }
+          return;
+        }
+
         setState(() {
-          _selectedDueDate = DateTime(
-            date.year,
-            date.month,
-            date.day,
-            time.hour,
-            time.minute,
-          );
+          _selectedDueDate = newDueDate;
         });
       }
     }
   }
 
   Future<void> _updateTask() async {
+    // 💡 1. Evitar la doble pulsación y la doble navegación
+    if (_isSaving) return;
+
+    setState(() {
+      _isSaving = true;
+    });
+
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null || _titleController.text.trim().isEmpty) return;
+    if (user == null || _titleController.text.trim().isEmpty) {
+      if (mounted) {
+        setState(() {
+          _isSaving = false; // Re-habilitar si falla la validación inicial
+        });
+      }
+      return;
+    }
 
     // Generamos el ID de notificación basado en el ID del documento
     final int notificationId = widget.taskId.hashCode.abs() % 1000000;
@@ -138,16 +186,22 @@ class _EditTaskPageState extends State<EditTaskPage> {
         }
       }
 
-      // 💡 CORRECCIÓN LINT: Usar if (mounted)
+      // 💡 Si todo es correcto, salimos.
       if (mounted) Navigator.pop(context);
     } catch (e) {
-      // 💡 CORRECCIÓN LINT: Usar if (mounted)
+      // 💡 Si hay un error, mostramos mensaje y re-habilitamos el botón.
       if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Error al actualizar: $e')));
+
+        setState(() {
+          _isSaving = false; // 💡 Re-habilitar el botón
+        });
       }
     }
+    // NOTA: No es necesario poner _isSaving = false; aquí,
+    // ya que en caso de éxito, la pantalla se cierra con Navigator.pop(context);
   }
 
   @override
@@ -237,17 +291,21 @@ class _EditTaskPageState extends State<EditTaskPage> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _updateTask,
+                  // 💡 CORRECCIÓN: Deshabilitar el botón si _isSaving es true
+                  onPressed: _isSaving ? null : _updateTask,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.cyanAccent,
+                    // Opcional: Cambiar el color si está deshabilitado
+                    disabledBackgroundColor: Colors.grey,
                     padding: const EdgeInsets.symmetric(vertical: 15),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  child: const Text(
-                    'GUARDAR CAMBIOS',
-                    style: TextStyle(
+                  child: Text(
+                    // Opcional: Mostrar un indicador de carga
+                    _isSaving ? 'GUARDANDO...' : 'GUARDAR CAMBIOS',
+                    style: const TextStyle(
                       fontSize: 18,
                       color: Colors.black,
                       fontWeight: FontWeight.bold,

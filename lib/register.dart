@@ -55,7 +55,7 @@ class _RegisterPageState extends State<RegisterPage> {
     } on FirebaseAuthException catch (e) {
       if (e.code == 'email-already-in-use') {
         setState(
-          () => _error = 'Este correo ya está registrado. Inicia sesión.',
+          () => _error = 'Este correo ya está registrado. Inicia sesión o revisa tu correo para verificar tu cuenta.',
         );
       } else {
         setState(() => _error = e.message);

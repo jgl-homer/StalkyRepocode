@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
-import 'delete_account.dart';
+import 'delete_account.dart'; // Asegúrate de que este archivo exista
 import 'dart:io';
 
 class ProfilePage extends StatefulWidget {
@@ -27,6 +27,10 @@ class _ProfilePageState extends State<ProfilePage> {
   bool _loading = false;
   bool _hasChanges = false;
 
+  // ESTADOS NUEVOS PARA LA CONTRASEÑA
+  String _currentPassword = '';
+  String _newPassword = '';
+
   @override
   void initState() {
     super.initState();
@@ -40,12 +44,15 @@ class _ProfilePageState extends State<ProfilePage> {
       final data = doc.data();
       setState(() {
         _name = data?['name'] ?? '';
-        _email = user.email ?? '';
+        _email = user.email ?? 'No disponible';
         _photoUrl =
             (data != null && data['photoUrl'] != null && data['photoUrl'] != '')
                 ? data['photoUrl']
                 : '';
         _imageFile = null;
+        _newPassword = '';
+        _currentPassword = ''; // Limpiar la contraseña actual al cargar datos
+        _hasChanges = false;
       });
     }
   }
@@ -68,105 +75,136 @@ class _ProfilePageState extends State<ProfilePage> {
     return await ref.getDownloadURL();
   }
 
-  ImageProvider _getProfileImage() {
+  ImageProvider? _getProfileImage() {
     if (_imageFile != null) return FileImage(_imageFile!);
     if (_photoUrl.isNotEmpty) return NetworkImage(_photoUrl);
-    return const AssetImage('assets/avatar_placeholder.png');
+    return null;
+  }
+
+  Future<void> _updatePassword(String newPassword) async {
+    final user = _auth.currentUser;
+
+    if (user == null) {
+      throw Exception('Usuario no autenticado.');
+    }
+
+    if (_currentPassword.isEmpty) {
+      throw FirebaseAuthException(
+        code: 'missing-current-password',
+        message: 'Debes ingresar tu contraseña actual para cambiarla.',
+      );
+    }
+
+    try {
+      // 1. Crear credencial para la re-autenticación (PASO CLAVE)
+      final AuthCredential credential = EmailAuthProvider.credential(
+        email: user.email!,
+        password: _currentPassword,
+      );
+
+      // 2. Re-autenticar al usuario para una operación sensible
+      await user.reauthenticateWithCredential(credential);
+
+      // 3. Si la re-autenticación fue exitosa, actualiza la contraseña
+      await user.updatePassword(newPassword);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Contraseña actualizada correctamente')),
+        );
+      }
+      _newPassword = ''; // Limpiar el estado
+      _currentPassword = ''; // Limpiar el estado
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
+        throw FirebaseAuthException(
+          code: 'wrong-password',
+          message:
+              'Contraseña actual incorrecta. No se pudo cambiar la contraseña.',
+        );
+      }
+      rethrow;
+    }
   }
 
   Future<void> _updateProfile() async {
     final user = _auth.currentUser;
     if (user == null) return;
 
-    if (!_hasChanges) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No hay cambios que guardar.')),
-      );
-      return;
-    }
-
     final isValid = _formKey.currentState?.validate() ?? false;
     if (!isValid) return;
     _formKey.currentState?.save();
 
+    // Si se está cambiando la contraseña, asigna el valor guardado antes de verificar requiresUpdate
+    final bool changingPassword = _newPassword.isNotEmpty;
+
+    // Bandera para verificar si hay cambios de contraseña, nombre o foto.
+    bool requiresUpdate = _hasChanges || changingPassword;
+
+    if (!requiresUpdate) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hay cambios para guardar.')),
+      );
+      return;
+    }
+
     setState(() => _loading = true);
 
     try {
-      String? downloadUrl;
-
-      if (_imageFile != null) {
-        downloadUrl = await _uploadProfileImage(user.uid);
+      // 1. Actualizar Contraseña (si se modificó)
+      if (changingPassword) {
+        await _updatePassword(_newPassword);
       }
 
-      final userDoc = _firestore.collection('users').doc(user.uid);
-      await userDoc.set({
-        'name': _name,
-        if (downloadUrl != null) 'photoUrl': downloadUrl,
-      }, SetOptions(merge: true));
+      // 2. Subir imagen y actualizar Firestore (si se modificó nombre o foto)
+      if (_hasChanges) {
+        String? downloadUrl;
 
-      setState(() => _hasChanges = false);
+        if (_imageFile != null) {
+          downloadUrl = await _uploadProfileImage(user.uid);
+        }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Perfil actualizado correctamente.')),
-      );
+        final userDoc = _firestore.collection('users').doc(user.uid);
+        await userDoc.set({
+          'name': _name,
+          if (downloadUrl != null) 'photoUrl': downloadUrl,
+        }, SetOptions(merge: true));
 
-      await _loadUserData();
+        // Refrescar datos y notificar
+        await _loadUserData();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Perfil actualizado correctamente.')),
+        );
+      }
+
+      setState(() => _hasChanges = false); // Restablecer estado de cambios
+    } on FirebaseAuthException catch (e) {
+      // Manejo específico de errores de autenticación
+      String errorMessage = e.message ?? 'Error de autenticación: ${e.code}';
+
+      // Muestra un SnackBar con el error
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $errorMessage'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } catch (e) {
+      // Otros errores
       setState(() => _error = e.toString());
     } finally {
       setState(() => _loading = false);
     }
   }
 
-  Future<void> _updateEmail(String newEmail) async {
-    final user = _auth.currentUser;
-    if (user == null) return;
-
-    try {
-      // Nota: Aquí se requiere una reautenticación para un entorno de producción,
-      // pero para simplificar, a menudo se omite en ejemplos si el usuario está activo.
-      // Aquí está el código para actualizar el email sin pedir la contraseña de nuevo
-      // (solo se requiere si la sesión ha sido reciente, menos de 5 minutos):
-      await user.verifyBeforeUpdateEmail(newEmail);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Correo de verificación enviado al nuevo email.')),
-      );
-    } on FirebaseAuthException catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: ${e.message}')),
-      );
-    }
-  }
-
-  Future<void> _updatePassword(String newPassword) async {
-    try {
-      // Similar al email, puede requerir reautenticación si la sesión no es reciente.
-      await _auth.currentUser!.updatePassword(newPassword);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Contraseña actualizada')),
-      );
-    } on FirebaseAuthException catch (e) {
-      setState(() => _error = e.message);
-    }
-  }
-
-  // 🔑 FUNCIÓN PARA CERRAR SESIÓN
   Future<void> _logout() async {
-    // 1. Cierra la sesión de Firebase
     await _auth.signOut();
-
-    // 2. Navega al inicio (LoginPage a través del StreamBuilder en main.dart)
     if (mounted) {
-      // Usar `pushReplacementNamed` o `pushAndRemoveUntil` es ideal,
-      // pero si main.dart usa un StreamBuilder, un simple pop o push ya basta
-      // porque el StreamBuilder detectará el cambio de estado.
-      // Para mayor seguridad y limpiar el historial:
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(
-            builder: (context) =>
-                const Placeholder()), // Usamos un placeholder si el root es un StreamBuilder
+      // Navega a la ruta de inicio de sesión y elimina todas las rutas anteriores.
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        '/login', // 👈 ASEGÚRATE DE QUE TU RUTA DE LOGIN SE LLAME ASÍ
         (Route<dynamic> route) => false,
       );
     }
@@ -174,6 +212,18 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
+    // Definimos el tema oscuro para los input
+    final darkInputDecoration = const InputDecoration().copyWith(
+      labelStyle: const TextStyle(color: Colors.white70),
+      enabledBorder: const UnderlineInputBorder(
+        borderSide: BorderSide(color: Colors.white54),
+      ),
+      focusedBorder: const UnderlineInputBorder(
+        borderSide: BorderSide(color: Colors.cyanAccent),
+      ),
+      hintStyle: const TextStyle(color: Colors.white38),
+    );
+
     return _loading
         ? const Center(child: CircularProgressIndicator())
         : RefreshIndicator(
@@ -182,63 +232,175 @@ class _ProfilePageState extends State<ProfilePage> {
               padding: const EdgeInsets.all(16),
               physics: const AlwaysScrollableScrollPhysics(),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   if (_error != null) ...[
                     Text(_error!, style: const TextStyle(color: Colors.red)),
                     const SizedBox(height: 10),
                   ],
-                  GestureDetector(
-                    onTap: _pickImage,
-                    child: Stack(
-                      alignment: Alignment.bottomRight,
-                      children: [
-                        CircleAvatar(
-                          radius: 55,
-                          backgroundImage: _getProfileImage(),
+
+                  // 1. ESTRUCTURA SUPERIOR: NOMBRE, CORREO y FOTO
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // A. Columna para Nombre y Correo
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Nombre',
+                                style: TextStyle(color: Colors.white70)),
+                            // **Nombre que se muestra en la parte superior**
+                            Text(
+                              _name.isNotEmpty ? _name : 'Cargando nombre...',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .headlineSmall!
+                                  .copyWith(color: Colors.white),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 20),
+
+                            const Text('Correo (No Editable)',
+                                style: TextStyle(color: Colors.white70)),
+                            // **Correo que se muestra en la parte superior**
+                            Text(
+                              _email,
+                              style: const TextStyle(
+                                  color: Colors.white54, fontSize: 16),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
                         ),
-                        Container(
-                          decoration: const BoxDecoration(
-                            color: Colors.cyanAccent,
-                            shape: BoxShape.circle,
-                          ),
-                          padding: const EdgeInsets.all(8),
-                          child:
-                              const Icon(Icons.camera_alt, color: Colors.black),
+                      ),
+
+                      // B. Contenedor de la Foto (a la derecha)
+                      GestureDetector(
+                        onTap: _pickImage,
+                        child: Stack(
+                          alignment: Alignment.bottomRight,
+                          children: [
+                            CircleAvatar(
+                              radius: 55,
+                              backgroundColor: Colors.grey.shade700,
+                              backgroundImage: _getProfileImage(),
+                              child: _getProfileImage() == null
+                                  ? const Icon(Icons.person,
+                                      size: 70, color: Colors.white)
+                                  : null,
+                            ),
+                            Container(
+                              decoration: const BoxDecoration(
+                                color: Colors.cyanAccent,
+                                shape: BoxShape.circle,
+                              ),
+                              padding: const EdgeInsets.all(8),
+                              child: const Icon(Icons.camera_alt,
+                                  color: Colors.black),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 30),
+
+                  // 2. Formulario para campos de edición
                   Form(
                     key: _formKey,
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        // 1. CAMPO DE NOMBRE
                         TextFormField(
                           initialValue: _name,
-                          decoration:
-                              const InputDecoration(labelText: 'Nombre'),
-                          onChanged: (_) => _hasChanges = true,
+                          decoration: darkInputDecoration.copyWith(
+                            labelText: 'Nombre',
+                          ),
+                          // Esto permite capturar cambios en tiempo real
+                          onChanged: (v) {
+                            setState(() {
+                              // Solo marcamos cambios si el nuevo valor es diferente del original
+                              if (v.trim() != _name) {
+                                _hasChanges = true;
+                              }
+                              _name = v.trim();
+                            });
+                          },
                           onSaved: (v) => _name = v!.trim(),
-                        ),
-                        const SizedBox(height: 16),
-                        TextFormField(
-                          initialValue: _email,
-                          decoration:
-                              const InputDecoration(labelText: 'Correo'),
-                          onFieldSubmitted: (value) {
-                            if (value != _email) _updateEmail(value);
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) {
+                              return 'El nombre no puede estar vacío';
+                            }
+                            final nameRegExp =
+                                RegExp(r"^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$");
+
+                            if (!nameRegExp.hasMatch(v.trim())) {
+                              return 'Solo se permiten letras y espacios en el nombre';
+                            }
+                            if (v.trim().length < 2) {
+                              return 'El nombre debe tener al menos 2 letras';
+                            }
+                            return null;
                           },
                         ),
                         const SizedBox(height: 16),
+
+                        // 2. CORREO (NO editable)
                         TextFormField(
+                          initialValue: _email,
                           decoration: const InputDecoration(
-                              labelText: 'Nueva contraseña'),
+                            labelText: 'Correo (No Editable)',
+                            border: OutlineInputBorder(),
+                            enabled: false, // Deshabilita la edición
+                            fillColor: Color.fromARGB(255, 30, 30, 30),
+                            filled: true,
+                          ),
+                          style: const TextStyle(color: Colors.white54),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // 3. CAMPO DE CONTRASEÑA ACTUAL (NUEVO)
+                        TextFormField(
+                          decoration: darkInputDecoration.copyWith(
+                            labelText:
+                                'Contraseña Actual (Necesaria si cambias la nueva)',
+                          ),
                           obscureText: true,
-                          onFieldSubmitted: _updatePassword,
+                          onChanged: (v) => _currentPassword =
+                              v.trim(), // 👈 Guardar la actual
+                          validator: (v) {
+                            // Se valida si hay algo en la nueva, entonces se pide la actual
+                            if (_newPassword.isNotEmpty &&
+                                (v == null || v.isEmpty)) {
+                              return 'Debes ingresar tu contraseña actual para cambiarla.';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 16),
+
+                        // 4. CAMBIAR CONTRASEÑA
+                        TextFormField(
+                          decoration: darkInputDecoration.copyWith(
+                              labelText:
+                                  'Nueva Contraseña (Dejar vacío para no cambiar)'),
+                          obscureText: true,
+                          onSaved: (v) => _newPassword =
+                              v!, // El onSaved actualiza el estado _newPassword
+                          validator: (v) {
+                            if (v != null && v.isNotEmpty && v.length < 6) {
+                              return 'La contraseña debe tener al menos 6 caracteres';
+                            }
+                            return null;
+                          },
                         ),
                         const SizedBox(height: 25),
+
+                        // Botón GUARDAR CAMBIOS
                         ElevatedButton(
-                          onPressed: _updateProfile,
+                          onPressed: _loading ? null : _updateProfile,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.cyanAccent,
                             foregroundColor: Colors.black,
@@ -248,11 +410,14 @@ class _ProfilePageState extends State<ProfilePage> {
                               borderRadius: BorderRadius.circular(30),
                             ),
                           ),
-                          child: const Text('Guardar cambios'),
+                          child: _loading
+                              ? const CircularProgressIndicator(
+                                  color: Colors.black)
+                              : const Text('Guardar cambios'),
                         ),
                         const SizedBox(height: 25),
 
-                        // 🔑 BOTÓN DE CERRAR SESIÓN
+                        // Botón CERRAR SESIÓN
                         OutlinedButton(
                           style: OutlinedButton.styleFrom(
                             side: const BorderSide(color: Colors.white70),
@@ -269,7 +434,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
                         const SizedBox(height: 25),
 
-                        // BOTÓN DE ELIMINAR CUENTA (manteniendo el estilo original)
+                        // Botón ELIMINAR CUENTA
                         ElevatedButton(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.redAccent,
