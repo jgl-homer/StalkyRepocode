@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:image_picker/image_picker.dart';
+// import 'dart:io'; // ❌ Eliminada
+// import 'package:firebase_storage/firebase_storage.dart'; // ❌ Eliminada
+// import 'package:image_picker/image_picker.dart'; // ❌ Eliminada
 import 'delete_account.dart'; // Asegúrate de que este archivo exista
-import 'dart:io';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -17,17 +17,17 @@ class _ProfilePageState extends State<ProfilePage> {
   final _formKey = GlobalKey<FormState>();
   final _auth = FirebaseAuth.instance;
   final _firestore = FirebaseFirestore.instance;
-  final _storage = FirebaseStorage.instance;
+  // final _storage = FirebaseStorage.instance; // ❌ Eliminada
 
   String _name = '';
   String _email = '';
-  String _photoUrl = '';
+  // String _photoUrl = ''; // ❌ Eliminada
   String? _error;
-  File? _imageFile;
+  // File? _imageFile; // ❌ Eliminada
   bool _loading = false;
   bool _hasChanges = false;
 
-  // ESTADOS NUEVOS PARA LA CONTRASEÑA
+  // ESTADOS para la contraseña
   String _currentPassword = '';
   String _newPassword = '';
 
@@ -45,42 +45,20 @@ class _ProfilePageState extends State<ProfilePage> {
       setState(() {
         _name = data?['name'] ?? '';
         _email = user.email ?? 'No disponible';
-        _photoUrl =
-            (data != null && data['photoUrl'] != null && data['photoUrl'] != '')
-                ? data['photoUrl']
-                : '';
-        _imageFile = null;
+        // ❌ Eliminada la lógica de photoUrl
+        // _imageFile = null; // ❌ Eliminada
         _newPassword = '';
-        _currentPassword = ''; // Limpiar la contraseña actual al cargar datos
+        _currentPassword = '';
         _hasChanges = false;
       });
     }
   }
 
-  Future<void> _pickImage() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery);
-    if (picked != null) {
-      setState(() {
-        _imageFile = File(picked.path);
-        _hasChanges = true;
-      });
-    }
-  }
+  // ❌ Eliminado: Future<void> _pickImage() async {...}
+  // ❌ Eliminado: Future<String?> _uploadProfileImage(String uid) async {...}
+  // ❌ Eliminado: ImageProvider? _getProfileImage() {...}
 
-  Future<String?> _uploadProfileImage(String uid) async {
-    if (_imageFile == null) return null;
-    final ref = _storage.ref().child('profile_images/$uid.jpg');
-    await ref.putFile(_imageFile!);
-    return await ref.getDownloadURL();
-  }
-
-  ImageProvider? _getProfileImage() {
-    if (_imageFile != null) return FileImage(_imageFile!);
-    if (_photoUrl.isNotEmpty) return NetworkImage(_photoUrl);
-    return null;
-  }
-
+  // Función para actualizar la contraseña (se mantiene, es vital para Firebase Auth)
   Future<void> _updatePassword(String newPassword) async {
     final user = _auth.currentUser;
 
@@ -96,13 +74,13 @@ class _ProfilePageState extends State<ProfilePage> {
     }
 
     try {
-      // 1. Crear credencial para la re-autenticación (PASO CLAVE)
+      // 1. Crear credencial para la re-autenticación
       final AuthCredential credential = EmailAuthProvider.credential(
         email: user.email!,
         password: _currentPassword,
       );
 
-      // 2. Re-autenticar al usuario para una operación sensible
+      // 2. Re-autenticar al usuario
       await user.reauthenticateWithCredential(credential);
 
       // 3. Si la re-autenticación fue exitosa, actualiza la contraseña
@@ -135,10 +113,10 @@ class _ProfilePageState extends State<ProfilePage> {
     if (!isValid) return;
     _formKey.currentState?.save();
 
-    // Si se está cambiando la contraseña, asigna el valor guardado antes de verificar requiresUpdate
     final bool changingPassword = _newPassword.isNotEmpty;
 
-    // Bandera para verificar si hay cambios de contraseña, nombre o foto.
+    // Bandera para verificar si hay cambios de contraseña o nombre.
+    // _hasChanges se actualiza en el onChanged del TextFormField
     bool requiresUpdate = _hasChanges || changingPassword;
 
     if (!requiresUpdate) {
@@ -156,18 +134,11 @@ class _ProfilePageState extends State<ProfilePage> {
         await _updatePassword(_newPassword);
       }
 
-      // 2. Subir imagen y actualizar Firestore (si se modificó nombre o foto)
+      // 2. Actualizar Nombre en Firestore (si se modificó)
       if (_hasChanges) {
-        String? downloadUrl;
-
-        if (_imageFile != null) {
-          downloadUrl = await _uploadProfileImage(user.uid);
-        }
-
         final userDoc = _firestore.collection('users').doc(user.uid);
         await userDoc.set({
           'name': _name,
-          if (downloadUrl != null) 'photoUrl': downloadUrl,
         }, SetOptions(merge: true));
 
         // Refrescar datos y notificar
@@ -179,10 +150,8 @@ class _ProfilePageState extends State<ProfilePage> {
 
       setState(() => _hasChanges = false); // Restablecer estado de cambios
     } on FirebaseAuthException catch (e) {
-      // Manejo específico de errores de autenticación
       String errorMessage = e.message ?? 'Error de autenticación: ${e.code}';
 
-      // Muestra un SnackBar con el error
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -192,7 +161,6 @@ class _ProfilePageState extends State<ProfilePage> {
         );
       }
     } catch (e) {
-      // Otros errores
       setState(() => _error = e.toString());
     } finally {
       setState(() => _loading = false);
@@ -224,242 +192,230 @@ class _ProfilePageState extends State<ProfilePage> {
       hintStyle: const TextStyle(color: Colors.white38),
     );
 
-    return _loading
-        ? const Center(child: CircularProgressIndicator())
-        : RefreshIndicator(
-            onRefresh: _loadUserData,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              physics: const AlwaysScrollableScrollPhysics(),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (_error != null) ...[
-                    Text(_error!, style: const TextStyle(color: Colors.red)),
-                    const SizedBox(height: 10),
-                  ],
-
-                  // 1. ESTRUCTURA SUPERIOR: NOMBRE, CORREO y FOTO
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Mi Perfil'),
+        backgroundColor: Colors.black, // O el color de tu tema
+        foregroundColor: Colors.white,
+      ),
+      body: Container(
+        // Contenedor para aplicar un fondo oscuro o gradiente si lo deseas
+        decoration: const BoxDecoration(
+          color: Colors.black, // Color de fondo oscuro para el perfil
+        ),
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : RefreshIndicator(
+                onRefresh: _loadUserData,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24), // Aumentado el padding
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // A. Columna para Nombre y Correo
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Nombre',
-                                style: TextStyle(color: Colors.white70)),
-                            // **Nombre que se muestra en la parte superior**
-                            Text(
-                              _name.isNotEmpty ? _name : 'Cargando nombre...',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .headlineSmall!
-                                  .copyWith(color: Colors.white),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 20),
+                      if (_error != null) ...[
+                        Text(_error!,
+                            style: const TextStyle(color: Colors.redAccent)),
+                        const SizedBox(height: 15),
+                      ],
 
-                            const Text('Correo (No Editable)',
-                                style: TextStyle(color: Colors.white70)),
-                            // **Correo que se muestra en la parte superior**
-                            Text(
-                              _email,
-                              style: const TextStyle(
-                                  color: Colors.white54, fontSize: 16),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
+                      // 1. ESTRUCTURA SUPERIOR: NOMBRE y CORREO (SIN FOTO)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('¡Hola!',
+                              style: TextStyle(
+                                  color: Colors.white70, fontSize: 18)),
+                          // **Nombre que se muestra en la parte superior**
+                          Text(
+                            _name.isNotEmpty ? _name : 'Cargando...',
+                            style: Theme.of(context)
+                                .textTheme
+                                .headlineLarge!
+                                .copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 10),
+
+                          // **Correo que se muestra en la parte superior**
+                          Text(
+                            _email,
+                            style: const TextStyle(
+                                color: Colors.cyanAccent, fontSize: 16),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ),
+                      const Divider(color: Colors.white38, height: 40),
 
-                      // B. Contenedor de la Foto (a la derecha)
-                      GestureDetector(
-                        onTap: _pickImage,
-                        child: Stack(
-                          alignment: Alignment.bottomRight,
+                      // 2. Formulario para campos de edición
+                      Form(
+                        key: _formKey,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            CircleAvatar(
-                              radius: 55,
-                              backgroundColor: Colors.grey.shade700,
-                              backgroundImage: _getProfileImage(),
-                              child: _getProfileImage() == null
-                                  ? const Icon(Icons.person,
-                                      size: 70, color: Colors.white)
-                                  : null,
-                            ),
-                            Container(
-                              decoration: const BoxDecoration(
-                                color: Colors.cyanAccent,
-                                shape: BoxShape.circle,
+                            // 1. CAMPO DE NOMBRE
+                            TextFormField(
+                              initialValue: _name,
+                              style: const TextStyle(color: Colors.white),
+                              decoration: darkInputDecoration.copyWith(
+                                labelText: 'Cambiar Nombre',
+                                prefixIcon: const Icon(Icons.person_outline,
+                                    color: Colors.white70),
                               ),
-                              padding: const EdgeInsets.all(8),
-                              child: const Icon(Icons.camera_alt,
-                                  color: Colors.black),
+                              onChanged: (v) {
+                                // Esto permite capturar cambios en tiempo real
+                                setState(() {
+                                  // Marcamos cambios si el valor es diferente del valor inicial (al cargar)
+                                  if (v.trim() != _name) {
+                                    _hasChanges = true;
+                                  } else {
+                                    // Comprobación más rigurosa para desmarcar si vuelve al original
+                                    _hasChanges = (v.trim() != _name) ||
+                                        _newPassword.isNotEmpty;
+                                  }
+                                });
+                              },
+                              onSaved: (v) => _name = v!.trim(),
+                              validator: (v) {
+                                if (v == null || v.trim().isEmpty) {
+                                  return 'El nombre no puede estar vacío';
+                                }
+                                final nameRegExp =
+                                    RegExp(r"^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$");
+
+                                if (!nameRegExp.hasMatch(v.trim())) {
+                                  return 'Solo se permiten letras y espacios en el nombre';
+                                }
+                                if (v.trim().length < 2) {
+                                  return 'El nombre debe tener al menos 2 letras';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 25),
+
+                            // 2. CAMPO DE CONTRASEÑA ACTUAL
+                            TextFormField(
+                              style: const TextStyle(color: Colors.white),
+                              decoration: darkInputDecoration.copyWith(
+                                labelText:
+                                    'Contraseña Actual (Necesaria si cambias la nueva)',
+                                prefixIcon: const Icon(Icons.lock_outline,
+                                    color: Colors.white70),
+                              ),
+                              obscureText: true,
+                              onChanged: (v) => _currentPassword =
+                                  v.trim(), // 👈 Guardar la actual
+                              validator: (v) {
+                                // Se valida si hay algo en la nueva, entonces se pide la actual
+                                if (_newPassword.isNotEmpty &&
+                                    (v == null || v.isEmpty)) {
+                                  return 'Debes ingresar tu contraseña actual para cambiarla.';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 16),
+
+                            // 3. CAMBIAR CONTRASEÑA
+                            TextFormField(
+                              style: const TextStyle(color: Colors.white),
+                              decoration: darkInputDecoration.copyWith(
+                                  labelText:
+                                      'Nueva Contraseña (Dejar vacío para no cambiar)',
+                                  prefixIcon: const Icon(Icons.vpn_key_outlined,
+                                      color: Colors.white70)),
+                              obscureText: true,
+                              onChanged: (v) {
+                                setState(() {
+                                  // Marcamos o desmarcamos cambios según la nueva contraseña
+                                  _hasChanges = _name != _name || v.isNotEmpty;
+                                  _newPassword = v.trim();
+                                });
+                              },
+                              onSaved: (v) => _newPassword =
+                                  v!, // El onSaved actualiza el estado _newPassword
+                              validator: (v) {
+                                if (v != null && v.isNotEmpty && v.length < 6) {
+                                  return 'La contraseña debe tener al menos 6 caracteres';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 35),
+
+                            // Botón GUARDAR CAMBIOS
+                            ElevatedButton(
+                              onPressed: _loading ? null : _updateProfile,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.cyanAccent,
+                                foregroundColor: Colors.black,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 40, vertical: 15),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(30),
+                                ),
+                              ),
+                              child: _loading
+                                  ? const CircularProgressIndicator(
+                                      color: Colors.black)
+                                  : const Text(
+                                      'Guardar cambios',
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.bold),
+                                    ),
+                            ),
+                            const SizedBox(height: 25),
+
+                            // Botón CERRAR SESIÓN
+                            OutlinedButton(
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: Colors.white70),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 40, vertical: 15),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(30),
+                                ),
+                              ),
+                              onPressed: _logout,
+                              child: const Text('Cerrar Sesión',
+                                  style: TextStyle(color: Colors.white70)),
+                            ),
+
+                            const SizedBox(height: 25),
+
+                            // Botón ELIMINAR CUENTA
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.redAccent,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 40, vertical: 15),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(30),
+                                ),
+                              ),
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) =>
+                                          const DeleteAccountPage()),
+                                );
+                              },
+                              child: const Text('Eliminar cuenta',
+                                  style: TextStyle(color: Colors.white)),
                             ),
                           ],
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 30),
-
-                  // 2. Formulario para campos de edición
-                  Form(
-                    key: _formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // 1. CAMPO DE NOMBRE
-                        TextFormField(
-                          initialValue: _name,
-                          decoration: darkInputDecoration.copyWith(
-                            labelText: 'Nombre',
-                          ),
-                          // Esto permite capturar cambios en tiempo real
-                          onChanged: (v) {
-                            setState(() {
-                              // Solo marcamos cambios si el nuevo valor es diferente del original
-                              if (v.trim() != _name) {
-                                _hasChanges = true;
-                              }
-                              _name = v.trim();
-                            });
-                          },
-                          onSaved: (v) => _name = v!.trim(),
-                          validator: (v) {
-                            if (v == null || v.trim().isEmpty) {
-                              return 'El nombre no puede estar vacío';
-                            }
-                            final nameRegExp =
-                                RegExp(r"^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$");
-
-                            if (!nameRegExp.hasMatch(v.trim())) {
-                              return 'Solo se permiten letras y espacios en el nombre';
-                            }
-                            if (v.trim().length < 2) {
-                              return 'El nombre debe tener al menos 2 letras';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 16),
-
-                        // 2. CORREO (NO editable)
-                        TextFormField(
-                          initialValue: _email,
-                          decoration: const InputDecoration(
-                            labelText: 'Correo (No Editable)',
-                            border: OutlineInputBorder(),
-                            enabled: false, // Deshabilita la edición
-                            fillColor: Color.fromARGB(255, 30, 30, 30),
-                            filled: true,
-                          ),
-                          style: const TextStyle(color: Colors.white54),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // 3. CAMPO DE CONTRASEÑA ACTUAL (NUEVO)
-                        TextFormField(
-                          decoration: darkInputDecoration.copyWith(
-                            labelText:
-                                'Contraseña Actual (Necesaria si cambias la nueva)',
-                          ),
-                          obscureText: true,
-                          onChanged: (v) => _currentPassword =
-                              v.trim(), // 👈 Guardar la actual
-                          validator: (v) {
-                            // Se valida si hay algo en la nueva, entonces se pide la actual
-                            if (_newPassword.isNotEmpty &&
-                                (v == null || v.isEmpty)) {
-                              return 'Debes ingresar tu contraseña actual para cambiarla.';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 16),
-
-                        // 4. CAMBIAR CONTRASEÑA
-                        TextFormField(
-                          decoration: darkInputDecoration.copyWith(
-                              labelText:
-                                  'Nueva Contraseña (Dejar vacío para no cambiar)'),
-                          obscureText: true,
-                          onSaved: (v) => _newPassword =
-                              v!, // El onSaved actualiza el estado _newPassword
-                          validator: (v) {
-                            if (v != null && v.isNotEmpty && v.length < 6) {
-                              return 'La contraseña debe tener al menos 6 caracteres';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 25),
-
-                        // Botón GUARDAR CAMBIOS
-                        ElevatedButton(
-                          onPressed: _loading ? null : _updateProfile,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.cyanAccent,
-                            foregroundColor: Colors.black,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 40, vertical: 15),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(30),
-                            ),
-                          ),
-                          child: _loading
-                              ? const CircularProgressIndicator(
-                                  color: Colors.black)
-                              : const Text('Guardar cambios'),
-                        ),
-                        const SizedBox(height: 25),
-
-                        // Botón CERRAR SESIÓN
-                        OutlinedButton(
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Colors.white70),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 40, vertical: 15),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(30),
-                            ),
-                          ),
-                          onPressed: _logout,
-                          child: const Text('Cerrar Sesión',
-                              style: TextStyle(color: Colors.white70)),
-                        ),
-
-                        const SizedBox(height: 25),
-
-                        // Botón ELIMINAR CUENTA
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.redAccent,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 40, vertical: 15),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(30),
-                            ),
-                          ),
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (_) => const DeleteAccountPage()),
-                            );
-                          },
-                          child: const Text('Eliminar cuenta',
-                              style: TextStyle(color: Colors.white)),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
-          );
+      ),
+    );
   }
 }

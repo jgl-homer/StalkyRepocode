@@ -22,7 +22,6 @@ class _RegisterPageState extends State<RegisterPage> {
   bool _isLoading = false;
 
   Future<void> _tryRegister() async {
-    // ... (Tu lógica de registro se mantiene) ...
     final isValid = _formKey.currentState?.validate() ?? false;
     if (!isValid) return;
     _formKey.currentState?.save();
@@ -39,12 +38,18 @@ class _RegisterPageState extends State<RegisterPage> {
       final user = userCred.user;
 
       if (user != null) {
+        // 1. Enviar correo de verificación
         await user.sendEmailVerification();
+
+        // 2. Guardar datos adicionales en Firestore
         await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
           'name': _name,
           'email': _email,
         });
 
+        // NOTA: Si deseas que el usuario sea redirigido a una pantalla
+        // de "Verificación Requerida", descomenta este bloque.
+        // Asegúrate de que el archivo y la clase VerificationRequiredPage existan.
         // if (mounted) {
         //   Navigator.pushReplacement(
         //     context,
@@ -55,7 +60,8 @@ class _RegisterPageState extends State<RegisterPage> {
     } on FirebaseAuthException catch (e) {
       if (e.code == 'email-already-in-use') {
         setState(
-          () => _error = 'Este correo ya está registrado. Inicia sesión o revisa tu correo para verificar tu cuenta.',
+          () => _error =
+              'Este correo ya está registrado. Inicia sesión o revisa tu correo para verificar tu cuenta.',
         );
       } else {
         setState(() => _error = e.message);
@@ -185,6 +191,10 @@ class _RegisterPageState extends State<RegisterPage> {
                               validator: (v) {
                                 if (v == null || v.trim().isEmpty)
                                   return 'Nombre obligatorio';
+                                // ✅ VALIDACIÓN PARA NO PERMITIR NÚMEROS
+                                if (RegExp(r'\d').hasMatch(v)) {
+                                  return 'El nombre no debe contener números.';
+                                }
                                 return null;
                               },
                               onSaved: (v) => _name = v!.trim(),

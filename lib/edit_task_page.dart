@@ -21,6 +21,8 @@ class EditTaskPage extends StatefulWidget {
 
 class _EditTaskPageState extends State<EditTaskPage> {
   late TextEditingController _titleController;
+  // 🔥 AGREGAR: Controlador para la materia
+  late TextEditingController _materiaController;
   late String _selectedPriority;
   late DateTime? _selectedDueDate;
 
@@ -36,6 +38,10 @@ class _EditTaskPageState extends State<EditTaskPage> {
     _titleController = TextEditingController(
       text: widget.initialData['title'] ?? '',
     );
+    // 🔥 INICIALIZAR: Cargar la materia inicial o 'General' por defecto
+    _materiaController = TextEditingController(
+      text: widget.initialData['materia'] ?? 'General',
+    );
     _selectedPriority = widget.initialData['priority'] ?? 'media';
 
     if (widget.initialData['dueDate'] != null &&
@@ -46,16 +52,22 @@ class _EditTaskPageState extends State<EditTaskPage> {
     }
   }
 
+  @override
+  void dispose() {
+    _titleController.dispose();
+    // 🔥 LIMPIAR: Liberar el controlador de materia
+    _materiaController.dispose();
+    super.dispose();
+  }
+
   // Selector combinado de Fecha y Hora (CORREGIDO)
   Future<void> _selectDateTime(BuildContext context) async {
     final DateTime now = DateTime.now();
-    // No permitir seleccionar fechas anteriores al inicio del día actual
     final DateTime todayStart = DateTime(now.year, now.month, now.day);
 
     final DateTime? date = await showDatePicker(
       context: context,
       initialDate: _selectedDueDate ?? now,
-      // 💡 CORRECCIÓN: No permitir fechas pasadas
       firstDate: todayStart,
       lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
       builder: (context, child) {
@@ -74,19 +86,16 @@ class _EditTaskPageState extends State<EditTaskPage> {
     if (date != null) {
       TimeOfDay initialTime;
 
-      // Si la fecha seleccionada es HOY, la hora inicial debe ser la hora actual
       if (date.year == now.year &&
           date.month == now.month &&
           date.day == now.day) {
         initialTime = TimeOfDay.fromDateTime(now);
       } else {
-        // Para días futuros, usar la hora que ya estaba seleccionada o la hora actual
         initialTime = TimeOfDay.fromDateTime(_selectedDueDate ?? now);
       }
 
       final TimeOfDay? time = await showTimePicker(
         context: context,
-        // 💡 CORRECCIÓN: Usar la hora inicial ajustada para hoy.
         initialTime: initialTime,
         builder: (context, child) {
           return Theme(
@@ -110,7 +119,6 @@ class _EditTaskPageState extends State<EditTaskPage> {
           time.minute,
         );
 
-        // 💡 VERIFICACIÓN FINAL: Asegurarse de que el momento combinado no sea pasado.
         if (newDueDate.isBefore(now)) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -130,28 +138,42 @@ class _EditTaskPageState extends State<EditTaskPage> {
   }
 
   Future<void> _updateTask() async {
-    // 💡 1. Evitar la doble pulsación y la doble navegación
     if (_isSaving) return;
+
+    final String title = _titleController.text.trim();
+    if (title.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('El título de la tarea no puede estar vacío.')),
+        );
+      }
+      return;
+    }
 
     setState(() {
       _isSaving = true;
     });
 
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null || _titleController.text.trim().isEmpty) {
+    if (user == null) {
       if (mounted) {
         setState(() {
-          _isSaving = false; // Re-habilitar si falla la validación inicial
+          _isSaving = false;
         });
       }
       return;
     }
 
-    // Generamos el ID de notificación basado en el ID del documento
+    // 🔥 LÓGICA DE MATERIA: Si está vacío, usa 'General'
+    final String rawMateria = _materiaController.text.trim();
+    final String materia = rawMateria.isEmpty ? 'General' : rawMateria;
+
     final int notificationId = widget.taskId.hashCode.abs() % 1000000;
 
     final dataToUpdate = {
-      'title': _titleController.text.trim(),
+      'title': title,
+      'materia': materia, // 🔥 AGREGAR: El campo de materia
       'priority': _selectedPriority,
       'dueDate': _selectedDueDate != null
           ? Timestamp.fromDate(_selectedDueDate!)
@@ -167,10 +189,10 @@ class _EditTaskPageState extends State<EditTaskPage> {
           .doc(widget.taskId)
           .update(dataToUpdate);
 
-      // 2. CANCELAR NOTIFICACIÓN ANTIGUA (importante para evitar duplicados)
+      // 2. CANCELAR NOTIFICACIÓN ANTIGUA
       await _notificationService.cancelNotification(notificationId);
 
-      // 3. PROGRAMAR NUEVA NOTIFICACIÓN (si hay fecha de vencimiento válida)
+      // 3. PROGRAMAR NUEVA NOTIFICACIÓN
       if (_selectedDueDate != null) {
         final reminderTime = _selectedDueDate!.subtract(
           const Duration(hours: 1),
@@ -179,29 +201,25 @@ class _EditTaskPageState extends State<EditTaskPage> {
         if (reminderTime.isAfter(DateTime.now())) {
           await _notificationService.scheduleNotification(
             notificationId,
-            '🔄 Tarea Modificada: ${_titleController.text.trim()}',
+            '🔄 Tarea Modificada: ${dataToUpdate['title']}',
             '¡Tu tarea de prioridad ${_selectedPriority.toUpperCase()} vence en 1 hora!',
             reminderTime,
           );
         }
       }
 
-      // 💡 Si todo es correcto, salimos.
       if (mounted) Navigator.pop(context);
     } catch (e) {
-      // 💡 Si hay un error, mostramos mensaje y re-habilitamos el botón.
       if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Error al actualizar: $e')));
 
         setState(() {
-          _isSaving = false; // 💡 Re-habilitar el botón
+          _isSaving = false;
         });
       }
     }
-    // NOTA: No es necesario poner _isSaving = false; aquí,
-    // ya que en caso de éxito, la pantalla se cierra con Navigator.pop(context);
   }
 
   @override
@@ -219,7 +237,7 @@ class _EditTaskPageState extends State<EditTaskPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Campo de Título
+              // Campo de Título (sin cambios)
               TextField(
                 controller: _titleController,
                 style: const TextStyle(color: Colors.white),
@@ -233,7 +251,27 @@ class _EditTaskPageState extends State<EditTaskPage> {
               ),
               const SizedBox(height: 30),
 
-              // Selector de Prioridad
+              // 🔥 AGREGAR: Campo de Materia (TextField)
+              TextField(
+                controller: _materiaController,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  labelText: 'Materia (Opcional)',
+                  hintText: 'Ej: Cálculo, Historia, General',
+                  labelStyle: TextStyle(color: Colors.white70),
+                  hintStyle: TextStyle(color: Colors.white30),
+                  enabledBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.cyanAccent),
+                  ),
+                  focusedBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.cyanAccent, width: 2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 30),
+              // 🔥 FIN DEL CAMPO MATERIA
+
+              // Selector de Prioridad (sin cambios)
               const Text(
                 'Prioridad:',
                 style: TextStyle(color: Colors.white70, fontSize: 16),
@@ -262,7 +300,7 @@ class _EditTaskPageState extends State<EditTaskPage> {
               ),
               const SizedBox(height: 30),
 
-              // Selector de Fecha
+              // Selector de Fecha (sin cambios)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -287,15 +325,13 @@ class _EditTaskPageState extends State<EditTaskPage> {
               ),
               const SizedBox(height: 50),
 
-              // Botón de Guardar
+              // Botón de Guardar (sin cambios en la lógica de _isSaving)
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  // 💡 CORRECCIÓN: Deshabilitar el botón si _isSaving es true
                   onPressed: _isSaving ? null : _updateTask,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.cyanAccent,
-                    // Opcional: Cambiar el color si está deshabilitado
                     disabledBackgroundColor: Colors.grey,
                     padding: const EdgeInsets.symmetric(vertical: 15),
                     shape: RoundedRectangleBorder(
@@ -303,7 +339,6 @@ class _EditTaskPageState extends State<EditTaskPage> {
                     ),
                   ),
                   child: Text(
-                    // Opcional: Mostrar un indicador de carga
                     _isSaving ? 'GUARDANDO...' : 'GUARDAR CAMBIOS',
                     style: const TextStyle(
                       fontSize: 18,

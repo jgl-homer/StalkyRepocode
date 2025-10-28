@@ -20,6 +20,9 @@ class AddTaskPage extends StatefulWidget {
 class _AddTaskPageState extends State<AddTaskPage> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
+  // 🔥 AGREGAR: Controlador para la materia
+  final _materiaController = TextEditingController();
+
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
   Priority _selectedPriority = Priority.media;
@@ -28,6 +31,7 @@ class _AddTaskPageState extends State<AddTaskPage> {
   bool _isSaving = false;
   final NotificationService _notificationService = NotificationService();
 
+  // Funciones _pickDate y _pickTime (sin cambios)
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -46,28 +50,19 @@ class _AddTaskPageState extends State<AddTaskPage> {
     if (picked != null) setState(() => _selectedTime = picked);
   }
 
-  // FUNCIÓN CLAVE: Determinar el intervalo de repetición automáticamente
+  // FUNCIÓN CLAVE: Determinar el intervalo de repetición automáticamente (sin cambios)
   int _determineIntervalMinutes(DateTime dueDate) {
     final totalDuration = dueDate.difference(DateTime.now());
 
-    if (totalDuration.isNegative) {
-      return 0; // No programar si ya venció
-    }
+    if (totalDuration.isNegative) return 0;
 
-    // Si la duración total es mayor o igual a 8 horas
     if (totalDuration.inHours >= 8) {
-      return 240; // 4 horas de intervalo
-    }
-    // Si la duración total es mayor o igual a 4 horas
-    else if (totalDuration.inHours >= 4) {
-      return 120; // 2 horas de intervalo
-    }
-    // Si la duración total es mayor o igual a 1 hora
-    else if (totalDuration.inHours >= 1) {
-      return 30; // 30 minutos de intervalo
-    }
-    // Si la duración total es menor a 1 hora (debe ser manejado por la lógica de un solo aviso)
-    else {
+      return 240; // 4 horas
+    } else if (totalDuration.inHours >= 4) {
+      return 120; // 2 horas
+    } else if (totalDuration.inHours >= 1) {
+      return 30; // 30 minutos
+    } else {
       return 15;
     }
   }
@@ -75,12 +70,12 @@ class _AddTaskPageState extends State<AddTaskPage> {
   Future<void> _saveTask() async {
     if (_isSaving) return;
 
+    // 🔥 MODIFICADO: Ahora el .validate() revisará Título Y Materia
     final isValid = _formKey.currentState?.validate() ?? false;
 
-    if (!isValid) {
-      setState(() => _error = 'El título es obligatorio.');
-      return;
-    }
+    // Si la validación falla (ej: título vacío o materia con números),
+    // el error se muestra en el campo, no es necesario un setState para error general.
+    if (!isValid) return;
 
     if ((_selectedDate != null && _selectedTime == null) ||
         (_selectedDate == null && _selectedTime != null)) {
@@ -127,8 +122,13 @@ class _AddTaskPageState extends State<AddTaskPage> {
           .doc(user.uid)
           .collection('tasks');
 
+      // 🔥 AGREGAR: Lógica para manejar y guardar la materia
+      final String rawMateria = _materiaController.text.trim();
+      final String materia = rawMateria.isEmpty ? 'General' : rawMateria;
+
       final taskData = {
         'title': _titleController.text.trim(),
+        'materia': materia, // 🔥 GUARDAR EL CAMPO MATERIA
         'userId': user.uid,
         'dueDate': dueDate != null ? Timestamp.fromDate(dueDate) : null,
         'priority': _selectedPriority.name,
@@ -138,13 +138,12 @@ class _AddTaskPageState extends State<AddTaskPage> {
 
       final docRef = await tasksRef.add(taskData);
 
-      // 2. CREACIÓN DE NOTIFICACIONES CON LÓGICA DE INTERVALO
+      // Lógica de notificaciones (sin cambios)
       if (dueDate != null) {
         final Duration totalDuration = dueDate.difference(DateTime.now());
         final String taskIdString = docRef.id;
         final int baseNotificationId = taskIdString.hashCode.abs() % 1000000;
 
-        // 🔑 CORRECCIÓN: Si la duración es menor a 15 minutos, solo programamos UNA alarma final.
         if (totalDuration.inMinutes < 15) {
           final int notificationId = baseNotificationId + 0;
 
@@ -152,20 +151,16 @@ class _AddTaskPageState extends State<AddTaskPage> {
             notificationId,
             '🚨 ¡Último Recordatorio!',
             'Tu tarea "${taskData['title']}" vence AHORA. ¡Es hora de completarla!',
-            dueDate, // Alarma programada exactamente a la hora de vencimiento
+            dueDate,
           );
         } else {
-          // Si la duración es de 15 minutos o más, usamos la lógica de lotes (constancia)
-
           final int intervalInMinutes = _determineIntervalMinutes(dueDate);
 
           if (intervalInMinutes > 0) {
             DateTime currentTime = DateTime.now();
             final DateTime finalDueDate = dueDate;
-
             int notificationCounter = 0;
 
-            // BUCLE DE PROGRAMACIÓN POR LOTE
             while (currentTime.isBefore(finalDueDate)) {
               final int notificationId =
                   baseNotificationId + notificationCounter;
@@ -184,7 +179,6 @@ class _AddTaskPageState extends State<AddTaskPage> {
                 currentTime,
               );
 
-              // Avanzar al próximo recordatorio
               currentTime = currentTime.add(
                 Duration(minutes: intervalInMinutes),
               );
@@ -209,12 +203,13 @@ class _AddTaskPageState extends State<AddTaskPage> {
   @override
   void dispose() {
     _titleController.dispose();
+    // 🔥 AGREGAR: Limpieza del controlador de materia
+    _materiaController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Usar DateFormat para manejar el formato de hora AM/PM correctamente
     String formatDate(DateTime? date, TimeOfDay? time) {
       if (date == null || time == null) return 'Seleccionar Fecha y Hora';
       final combined = DateTime(
@@ -240,6 +235,7 @@ class _AddTaskPageState extends State<AddTaskPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // Campo Título (sin cambios)
               TextFormField(
                 controller: _titleController,
                 decoration: const InputDecoration(
@@ -259,16 +255,49 @@ class _AddTaskPageState extends State<AddTaskPage> {
                     : null,
               ),
               const SizedBox(height: 20),
-              // Selector de Fecha y Hora
+
+              // 🔥 AGREGAR: Campo Materia con Validación
+              TextFormField(
+                controller: _materiaController,
+                decoration: const InputDecoration(
+                  labelText: 'Materia (Opcional)',
+                  hintText: 'Ej: Cálculo, Historia, General',
+                  border: OutlineInputBorder(),
+                  labelStyle: TextStyle(color: Colors.white70),
+                  hintStyle: TextStyle(color: Colors.white30),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: Colors.cyanAccent),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: Colors.cyanAccent, width: 2),
+                  ),
+                ),
+                style: const TextStyle(color: Colors.white),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return null; // Es opcional, si está vacío no hay error.
+                  }
+                  // RegExp que solo permite letras, acentos, 'ñ' y espacios.
+                  final regExp = RegExp(r'^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$');
+                  if (!regExp.hasMatch(value)) {
+                    return 'Inválido: Solo se permiten letras y espacios.';
+                  }
+                  return null;
+                },
+              ),
+              // 🔥 FIN DEL CAMPO MATERIA
+
+              const SizedBox(height: 20),
+
+              // Selector de Fecha y Hora (sin cambios)
               Card(
                 color: Colors.white10,
                 child: ListTile(
                   title: Text(
                     formatDate(_selectedDate, _selectedTime),
                     style: TextStyle(
-                      color: _selectedDate == null
-                          ? Colors.white54
-                          : Colors.white,
+                      color:
+                          _selectedDate == null ? Colors.white54 : Colors.white,
                     ),
                   ),
                   trailing: const Icon(
@@ -284,11 +313,12 @@ class _AddTaskPageState extends State<AddTaskPage> {
                 ),
               ),
               const SizedBox(height: 20),
+
+              // Selector de Prioridad y Botón de Guardar (sin cambios)
               const Text(
                 'Prioridad:',
                 style: TextStyle(fontSize: 16, color: Colors.white70),
               ),
-              // Selector de Prioridad
               Column(
                 children: Priority.values.map((priority) {
                   return RadioListTile<Priority>(
@@ -316,7 +346,6 @@ class _AddTaskPageState extends State<AddTaskPage> {
                     style: const TextStyle(color: Colors.redAccent),
                   ),
                 ),
-              // Botón de Guardar
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.cyanAccent,

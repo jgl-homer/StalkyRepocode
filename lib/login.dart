@@ -1,10 +1,10 @@
-// Archivo: lib/login.dart (FINAL CON ÍCONO EN LA ESQUINA DEL CONTENEDOR)
+// Archivo: lib/login.dart (FINAL CORREGIDO Y COMPLETO)
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'register.dart';
 import 'dashboard.dart';
-import 'fcm_service.dart'; // 🚀 IMPORTACIÓN NECESARIA PARA LA FUNCIÓN
+// import 'fcm_service.dart'; // Importación comentada/eliminada
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -51,9 +51,8 @@ class _LoginPageState extends State<LoginPage> {
           return;
         }
 
-        // Se asume que saveFCMToken() está definido en fcm_service.dart
         // ignore: todo
-        // TODO: Descomenta la siguiente línea si la función existe y es necesaria.
+        // TODO: Descomenta la siguiente línea si la función saveFCMToken() existe.
         // await saveFCMToken();
 
         if (mounted) {
@@ -82,22 +81,43 @@ class _LoginPageState extends State<LoginPage> {
 
   // Restablecer contraseña
   Future<void> _resetPassword() async {
-    if (_email.isEmpty) {
+    // ⚠️ CORRECCIÓN del error use_of_void_result: Llamamos a save() como acción.
+    _formKey.currentState?.save();
+
+    // Verificamos si el email es válido después de llamar a save()
+    if (_email.isEmpty ||
+        !RegExp(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+            .hasMatch(_email.trim())) {
       setState(
-        () => _error = 'Ingresa tu correo para restablecer la contraseña',
+        () => _error =
+            'Ingresa un correo válido en el campo superior para restablecer la contraseña',
       );
       return;
     }
+
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
     try {
       await FirebaseAuth.instance.sendPasswordResetEmail(email: _email);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Correo de recuperación enviado')),
+          SnackBar(
+              content: Text(
+                  'Correo de recuperación enviado a $_email. Revisa tu bandeja.')),
         );
         setState(() => _error = null);
       }
     } on FirebaseAuthException catch (e) {
       setState(() => _error = e.message);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -125,7 +145,6 @@ class _LoginPageState extends State<LoginPage> {
     );
 
     return Scaffold(
-      // 💡 Eliminamos el AppBar y colocamos todo en el body
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -139,26 +158,25 @@ class _LoginPageState extends State<LoginPage> {
           ),
         ),
         child: Center(
-          // 💡 El SingleChildScrollView simulará la tarjeta
           child: Container(
             constraints: const BoxConstraints(maxWidth: 400),
             margin: const EdgeInsets.all(24),
             padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 40),
             decoration: BoxDecoration(
-              color:
-                  Colors.black.withOpacity(0.5), // Fondo de la "tarjeta" oscura
+              // ⚠️ CORRECCIÓN: Usando Color.fromARGB para reemplazar withOpacity.
+              color: const Color.fromARGB(
+                  128, 0, 0, 0), // Fondo oscuro con 50% de opacidad.
               borderRadius: BorderRadius.circular(20),
             ),
             child: SingleChildScrollView(
               child: Stack(
-                // Usamos Stack para posicionar el ícono en la esquina
                 children: [
-                  // 1. Ícono de la App en la esquina superior derecha
+                  // 1. Ícono de la App en la esquina superior derecha (RESTAURADO EL IMAGE.ASSET)
                   Positioned(
                     top: 0,
                     right: 0,
                     child: Image.asset(
-                      'assets/logo/icon.png', // 🚀 Tu logo de la app
+                      'assets/logo/icon.png', // ✅ ¡TU IMAGEN DE ASSET ORIGINAL RESTAURADA!
                       height: 25,
                       width: 25,
                     ),
@@ -181,7 +199,7 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                       ),
                       const Text(
-                        'Iniciar Sesión', // Muestra la acción (opcional)
+                        'Iniciar Sesión',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w400,
@@ -221,6 +239,7 @@ class _LoginPageState extends State<LoginPage> {
                                 }
                                 return null;
                               },
+                              onChanged: (v) => _email = v.trim(),
                               onSaved: (v) => _email = v!.trim(),
                             ),
                             const SizedBox(height: 16),
@@ -242,8 +261,7 @@ class _LoginPageState extends State<LoginPage> {
                             // Botón de Entrar
                             ElevatedButton(
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors
-                                    .amber, // Botón amarillo como en la imagen
+                                backgroundColor: Colors.amber,
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 40,
                                   vertical: 15,
@@ -271,6 +289,18 @@ class _LoginPageState extends State<LoginPage> {
                                     ),
                             ),
                             const SizedBox(height: 10),
+
+                            // 🔑 ENLACE DE OLVIDÉ MI CONTRASEÑA
+                            TextButton(
+                              onPressed: _isLoading ? null : _resetPassword,
+                              child: const Text(
+                                '¿Olvidaste tu contraseña?',
+                                style: TextStyle(color: Colors.white70),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+
+                            // Enlace para ir al Registro
                             TextButton(
                               onPressed: () => Navigator.push(
                                 context,
@@ -279,11 +309,10 @@ class _LoginPageState extends State<LoginPage> {
                                 ),
                               ),
                               child: const Text(
-                                'Crear cuenta nueva', // Texto similar a la imagen
+                                'Crear cuenta nueva',
                                 style: TextStyle(color: Colors.white70),
                               ),
                             ),
-                            // Se elimina el TextButton de '¿Olvidaste tu contraseña?' para simplificar y acercarnos a la imagen.
                           ],
                         ),
                       ),
