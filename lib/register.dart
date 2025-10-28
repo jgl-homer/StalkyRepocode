@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-// import 'verification_required.dart'; // Importación comentada si no existe
+import 'verification_required.dart'; // ✅ Importación de la página de verificación
 // import 'fcm_service.dart'; // Importación comentada si no existe
 
 class RegisterPage extends StatefulWidget {
@@ -47,15 +47,13 @@ class _RegisterPageState extends State<RegisterPage> {
           'email': _email,
         });
 
-        // NOTA: Si deseas que el usuario sea redirigido a una pantalla
-        // de "Verificación Requerida", descomenta este bloque.
-        // Asegúrate de que el archivo y la clase VerificationRequiredPage existan.
-        // if (mounted) {
-        //   Navigator.pushReplacement(
-        //     context,
-        //     MaterialPageRoute(builder: (_) => const VerificationRequiredPage()),
-        //   );
-        // }
+        // ✅ Bloque DESCOMENTADO para redirigir a la pantalla de verificación
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const VerificationRequiredPage()),
+          );
+        }
       }
     } on FirebaseAuthException catch (e) {
       if (e.code == 'email-already-in-use') {
