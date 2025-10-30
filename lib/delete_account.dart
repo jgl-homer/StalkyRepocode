@@ -3,6 +3,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'login.dart';
 
+// --- COLORES CYBERPUNK ---
+const Color _primaryGold = Color(0xFFFFD700); // Dorado
+const Color _accentCyan = Colors.cyanAccent; // Cian
+const Color _darkBackground = Colors.black; // Negro oscuro de fondo
+// -------------------------
+
 class DeleteAccountPage extends StatefulWidget {
   const DeleteAccountPage({super.key});
 
@@ -16,6 +22,36 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
   String? _error;
   bool _loading = false;
 
+  // --- WIDGET PARA DECORACIÓN DE INPUT CYBERPUNK (Adaptado) ---
+  InputDecoration _getInputDecoration(String label) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: const TextStyle(color: _accentCyan),
+      hintStyle: const TextStyle(color: Colors.white30),
+      contentPadding:
+          const EdgeInsets.symmetric(vertical: 15.0, horizontal: 10.0),
+      filled: true,
+      fillColor: Colors.grey.withOpacity(0.1), // Fondo ligeramente visible
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Colors.white38, width: 1),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: _accentCyan, width: 2),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Colors.redAccent, width: 2),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Colors.red, width: 3),
+      ),
+    );
+  }
+
+  // --- LÓGICA DE ELIMINACIÓN (SIN CAMBIOS) ---
   Future<void> _deleteAccount() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -39,7 +75,10 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
       await user.reauthenticateWithCredential(cred);
 
       // Eliminamos sus datos de Firestore
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).delete();
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .delete();
 
       // Eliminamos su cuenta de Firebase Auth
       await user.delete();
@@ -48,6 +87,7 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Cuenta eliminada con éxito')),
         );
+        // Navega a Login y elimina todas las rutas anteriores
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (_) => const LoginPage()),
@@ -55,108 +95,136 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
         );
       }
     } on FirebaseAuthException catch (e) {
-      setState(() => _error = e.message ?? 'Error al eliminar cuenta');
+      // Mapeo simple de errores, o mantienes el mensaje completo de Firebase
+      String message = 'Error al eliminar cuenta';
+      if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
+        message = 'Contraseña incorrecta. Por favor, inténtalo de nuevo.';
+      } else if (e.code == 'requires-recent-login') {
+        message =
+            'Por favor, cierra sesión y vuelve a iniciarla para eliminar tu cuenta.';
+      } else {
+        message = e.message ?? 'Error desconocido';
+      }
+
+      setState(() => _error = message);
     } finally {
       setState(() => _loading = false);
     }
   }
+  // ---------------------------------------------
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Eliminar cuenta')),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Color.fromARGB(255, 238, 92, 151),
-              Color.fromARGB(255, 0, 0, 0),
-              Color.fromARGB(255, 47, 211, 233),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
+      backgroundColor: _darkBackground, // Fondo totalmente negro
+      appBar: AppBar(
+        title: const Text(
+          'Eliminar Cuenta',
+          style: TextStyle(color: _primaryGold, fontWeight: FontWeight.bold),
         ),
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.warning_amber_rounded,
-                    color: Colors.redAccent, size: 80),
-                const SizedBox(height: 20),
-                const Text(
-                  'Confirmar eliminación de cuenta',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
+        backgroundColor: _darkBackground,
+        iconTheme: const IconThemeData(color: _accentCyan),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Icon(Icons.warning_amber_rounded,
+                color: Colors.redAccent, size: 80),
+            const SizedBox(height: 20),
+            const Text(
+              'ELIMINACIÓN DE DATOS (Protocolo R3D)',
+              style: TextStyle(
+                color: Colors.redAccent,
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              '⚠️ ADVERTENCIA: Esta acción es permanente. Se eliminará tu cuenta de usuario y todos los datos (tareas) asociados a ella en Firestore. Debes reingresar tu contraseña.',
+              style: TextStyle(color: Colors.white70, fontSize: 16),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 40),
+
+            // --- Mensaje de Error (Estilizado) ---
+            if (_error != null)
+              Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.2),
+                  border: Border.all(color: Colors.redAccent),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  _error!,
+                  style: const TextStyle(
+                      color: Colors.redAccent, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+
+            // --- Formulario de Contraseña ---
+            Form(
+              key: _formKey,
+              child: Column(
+                children: [
+                  TextFormField(
+                    obscureText: true,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: _getInputDecoration(
+                        'Contraseña'), // Usa el estilo Cyberpunk
+                    validator: (v) => v == null || v.isEmpty
+                        ? 'Ingresa tu contraseña para confirmar'
+                        : null,
+                    onSaved: (v) => _password = v!.trim(),
                   ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 10),
-                const Text(
-                  'Por seguridad, introduce tu contraseña para confirmar la eliminación de tu cuenta. Esta acción no se puede deshacer.',
-                  style: TextStyle(color: Colors.white70),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 30),
-                if (_error != null) ...[
-                  Text(_error!, style: const TextStyle(color: Colors.redAccent)),
-                  const SizedBox(height: 20),
-                ],
-                Form(
-                  key: _formKey,
-                  child: Column(
-                    children: [
-                      TextFormField(
-                        obscureText: true,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
-                          labelText: 'Contraseña',
-                          labelStyle: const TextStyle(color: Colors.white70),
-                          filled: true,
-                          fillColor: Colors.black.withOpacity(0.3),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
+                  const SizedBox(height: 40),
+
+                  // --- Botón de ELIMINAR (Rojo intenso, resaltando el peligro) ---
+                  _loading
+                      ? const CircularProgressIndicator(color: Colors.redAccent)
+                      : SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: _deleteAccount,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor:
+                                  Colors.redAccent, // Botón de PELIGRO
+                              padding: const EdgeInsets.symmetric(vertical: 15),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                side: const BorderSide(
+                                    color: Colors.red, width: 2),
+                              ),
+                              elevation: 8,
+                              shadowColor: Colors.red.withOpacity(0.8),
+                            ),
+                            child: const Text(
+                              'ELIMINAR CUENTA PERMANENTEMENTE',
+                              style: TextStyle(
+                                  fontSize: 18,
+                                  color: _darkBackground,
+                                  fontWeight: FontWeight.w900),
+                            ),
                           ),
                         ),
-                        validator: (v) =>
-                            v == null || v.isEmpty ? 'Ingresa tu contraseña' : null,
-                        onSaved: (v) => _password = v!.trim(),
-                      ),
-                      const SizedBox(height: 30),
-                      _loading
-                          ? const CircularProgressIndicator()
-                          : ElevatedButton(
-                              onPressed: _deleteAccount,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.redAccent,
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 40, vertical: 15),
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(30)),
-                              ),
-                              child: const Text(
-                                'Eliminar cuenta',
-                                style: TextStyle(
-                                    fontSize: 18, color: Colors.white),
-                              ),
-                            ),
-                      const SizedBox(height: 16),
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('Cancelar',
-                            style: TextStyle(color: Colors.white70)),
-                      ),
-                    ],
+                  const SizedBox(height: 16),
+
+                  // --- Botón de Cancelar ---
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancelar / Regresar',
+                        style: TextStyle(color: _accentCyan)),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );

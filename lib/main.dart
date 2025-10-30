@@ -44,9 +44,13 @@ Future<void> main() async {
   );
 
   // 🚀 5. Inicializar el Servicio de Notificaciones (para notificaciones locales)
-  await NotificationService().initNotifications();
+  final notificationService = NotificationService(); // Almacenar la instancia
+  await notificationService.initNotifications();
 
-  // 🔔 6. CONFIGURAR LISTENERS DE MENSAJES EN PRIMER PLANO (Foreground)
+  // 🧭 6. PROGRAMAR EL RECORDATORIO CONSTANTE <--- ¡NUEVA LÍNEA CLAVE!
+  await notificationService.scheduleConstantReminder();
+
+  // 🔔 7. CONFIGURAR LISTENERS DE MENSAJES EN PRIMER PLANO (Foreground)
   FirebaseMessaging.onMessage.listen((RemoteMessage message) {
     print('Got a message whilst in the foreground!');
     print('Message data: ${message.data}');

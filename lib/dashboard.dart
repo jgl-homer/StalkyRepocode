@@ -1,12 +1,17 @@
+// Archivo: lib/dashboard_page.dart (Diseño: Tornasol, Lógica: Agrupación por Materia)
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'add_task_page.dart';
-import 'profile.dart';
-import 'edit_task_page.dart';
 import 'package:intl/intl.dart';
-// Importación necesaria para quitar acentos en la agrupación
+import 'dart:math';
+// Importación de lógica para agrupación por materia
 import 'package:diacritic/diacritic.dart';
+
+// Importaciones con alias para evitar conflicto de nombres
+import 'add_task_page.dart' as addPage;
+import 'edit_task_page.dart' as editPage;
+import 'profile.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -15,10 +20,37 @@ class DashboardPage extends StatefulWidget {
   State<DashboardPage> createState() => _DashboardPageState();
 }
 
-class _DashboardPageState extends State<DashboardPage> {
+class _DashboardPageState extends State<DashboardPage>
+    with SingleTickerProviderStateMixin {
   int _selectedIndex = 0;
+  late AnimationController _controller;
 
-  // 🗑️ FUNCIÓN PARA ELIMINAR TAREA EN FIRESTORE
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 6),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  // 🎨 Gradiente tornasol dorado-morado (animado)
+  Shader _tornasolGradient(Rect bounds) {
+    return LinearGradient(
+      colors: const [Color(0xFFFFD700), Color(0xFFB300FF)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      transform: GradientRotation(_controller.value * 2 * pi),
+    ).createShader(bounds);
+  }
+
+  // 🗑️ ELIMINAR TAREA
   Future<void> _deleteTask(String docId) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -43,13 +75,15 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
-  // 📝 FUNCIÓN PARA EDITAR TAREA (CONECTA CON EditTaskPage)
+  // 📝 EDITAR TAREA — usa el alias editPage
   void _editTask(String docId, Map<String, dynamic> currentTaskData) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) =>
-            EditTaskPage(taskId: docId, initialData: currentTaskData),
+        builder: (context) => editPage.EditTaskPage(
+          taskId: docId,
+          initialData: currentTaskData,
+        ),
       ),
     ).then((_) => setState(() {}));
   }
@@ -57,7 +91,6 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
-
     if (user == null) {
       return const Scaffold(
         body: Center(
@@ -71,54 +104,123 @@ class _DashboardPageState extends State<DashboardPage> {
 
     final screens = [_buildTasksPage(user), const ProfilePage()];
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: const Text('Taskify'),
-        backgroundColor: Colors.black,
-        // 🚀 AÑADIR EL ÍCONO A LA DERECHA
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 15.0),
-            child: Image.asset(
-              'assets/logo/icon.png',
-              height: 32,
-              width: 32,
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        return Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            title: ShaderMask(
+              shaderCallback: (bounds) => _tornasolGradient(bounds),
+              child: const Text(
+                'Taskify',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 24,
+                ),
+              ),
             ),
+            backgroundColor: Colors.black,
+            actions: [
+              Padding(
+                padding: const EdgeInsets.only(right: 15.0),
+                child: Image.asset(
+                  'assets/logo/icon.png',
+                  height: 32,
+                  width: 32,
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
-      body: screens[_selectedIndex],
-      floatingActionButton: _selectedIndex == 0
-          ? FloatingActionButton(
-              backgroundColor: Colors.cyanAccent,
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const AddTaskPage()),
-                ).then((_) => setState(() {}));
-              },
-              child: const Icon(Icons.add, color: Colors.black),
-            )
-          : null,
-      bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: Colors.grey[900],
-        selectedItemColor: Colors.cyanAccent,
-        unselectedItemColor: Colors.white70,
-        currentIndex: _selectedIndex,
-        onTap: (index) => setState(() => _selectedIndex = index),
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.list_alt),
-            label: 'Mis Tareas',
+          body: Stack(
+            children: [
+              Positioned.fill(
+                child: Opacity(
+                  opacity: 0.35,
+                  child: Center(
+                    child: Image.asset(
+                      'assets/logo/icon.png',
+                      fit: BoxFit.contain,
+                      width: MediaQuery.of(context).size.width * 0.8,
+                    ),
+                  ),
+                ),
+              ),
+              screens[_selectedIndex],
+            ],
           ),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Perfil'),
-        ],
-      ),
+          floatingActionButton: _selectedIndex == 0
+              ? AnimatedBuilder(
+                  animation: _controller,
+                  builder: (context, _) {
+                    return FloatingActionButton(
+                      backgroundColor: Colors.transparent,
+                      elevation: 0,
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) =>
+                                  const addPage.AddTaskPage()),
+                        ).then((_) => setState(() {}));
+                      },
+                      child: Container(
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            colors: const [
+                              Color(0xFFFFD700),
+                              Color(0xFFB300FF)
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            transform:
+                                GradientRotation(_controller.value * 2 * pi),
+                          ),
+                        ),
+                        child: const Center(
+                          child: Icon(
+                            Icons.add,
+                            size: 36,
+                            color: Colors.black,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                )
+              : null,
+          bottomNavigationBar: BottomNavigationBar(
+            backgroundColor: Colors.black,
+            selectedItemColor: const Color(0xFFFFD700),
+            unselectedItemColor: Colors.white70,
+            currentIndex: _selectedIndex,
+            onTap: (index) => setState(() => _selectedIndex = index),
+            items: [
+              BottomNavigationBarItem(
+                icon: ShaderMask(
+                  shaderCallback: (bounds) => _tornasolGradient(bounds),
+                  child: const Icon(Icons.list_alt, color: Colors.white),
+                ),
+                label: 'Mis Tareas',
+              ),
+              BottomNavigationBarItem(
+                icon: ShaderMask(
+                  shaderCallback: (bounds) => _tornasolGradient(bounds),
+                  child: const Icon(Icons.person, color: Colors.white),
+                ),
+                label: 'Perfil',
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
-  // 📦 FUNCIÓN MODIFICADA PARA AGRUPAR TAREAS POR MATERIA Y MOSTRARLA
   Widget _buildTasksPage(User user) {
     final tasksStream = FirebaseFirestore.instance
         .collection('users')
@@ -132,7 +234,7 @@ class _DashboardPageState extends State<DashboardPage> {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
-            child: CircularProgressIndicator(color: Colors.cyanAccent),
+            child: CircularProgressIndicator(color: Color(0xFFFFD700)),
           );
         }
 
@@ -145,17 +247,15 @@ class _DashboardPageState extends State<DashboardPage> {
           );
         }
 
-        // --- 1. LÓGICA DE AGRUPACIÓN POR MATERIA ---
+        // --- AGRUPACIÓN POR MATERIA ---
         final tasks = snapshot.data!.docs;
         final Map<String, List<QueryDocumentSnapshot>> groupedTasks = {};
 
         for (var doc in tasks) {
-          final taskData = doc.data() as Map<String, dynamic>;
+          final taskData = doc.data() as Map<String, dynamic>? ?? {};
           final String rawMateria = taskData['materia'] ?? 'General';
-
-          final String lower = rawMateria.trim().toLowerCase();
           final String materiaKey =
-              removeDiacritics(lower); // Quitar acentos para agrupar
+              removeDiacritics(rawMateria.trim().toLowerCase());
 
           if (groupedTasks[materiaKey] == null) {
             groupedTasks[materiaKey] = [];
@@ -165,7 +265,6 @@ class _DashboardPageState extends State<DashboardPage> {
 
         final sortedMaterias = groupedTasks.keys.toList()..sort();
 
-        // --- 2. CONSTRUIR LA LISTA CON SECCIONES ---
         return ListView.builder(
           padding: const EdgeInsets.all(12),
           itemCount: sortedMaterias.length,
@@ -173,20 +272,15 @@ class _DashboardPageState extends State<DashboardPage> {
             final materiaKey = sortedMaterias[index];
             final tasksInMateria = groupedTasks[materiaKey]!;
 
-            // Obtener el nombre de la materia original (con mayúsculas/acentos) para mostrar
-            String displayMateria;
-            final firstTaskData =
-                tasksInMateria[0].data() as Map<String, dynamic>;
-            displayMateria = firstTaskData['materia']?.trim() ?? 'General';
-
-            if (displayMateria.isEmpty) {
-              displayMateria = 'General';
-            }
+            String displayMateria =
+                (tasksInMateria[0].data() as Map<String, dynamic>? ??
+                        {})['materia'] ??
+                    'General';
+            if (displayMateria.isEmpty) displayMateria = 'General';
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // --- TÍTULO DE LA SECCIÓN (MATERIA) ---
                 Padding(
                   padding: const EdgeInsets.fromLTRB(8, 16, 8, 8),
                   child: Text(
@@ -199,25 +293,21 @@ class _DashboardPageState extends State<DashboardPage> {
                     ),
                   ),
                 ),
-
-                // --- LISTA INTERNA DE TAREAS PARA ESA MATERIA ---
                 ...List.generate(tasksInMateria.length, (taskIndex) {
                   final doc = tasksInMateria[taskIndex];
                   final docId = doc.id;
-                  final task = doc.data() as Map<String, dynamic>;
+                  final task = doc.data() as Map<String, dynamic>? ?? {};
 
                   final title = task['title'] ?? 'Sin título';
                   final priority = task['priority'] ?? 'media';
-                  final materia =
-                      task['materia'] ?? 'General'; // 🔥 OBTENER MATERIA
+                  final materia = task['materia'] ?? 'General';
 
                   DateTime? dueDate;
                   String dueDateFormatted = '';
                   if (task['dueDate'] != null && task['dueDate'] is Timestamp) {
                     dueDate = (task['dueDate'] as Timestamp).toDate();
-                    dueDateFormatted = DateFormat(
-                      'dd/MM/yyyy h:mm a',
-                    ).format(dueDate);
+                    dueDateFormatted =
+                        DateFormat('dd/MM/yyyy h:mm a').format(dueDate);
                   }
 
                   Color priorityColor;
@@ -226,7 +316,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       priorityColor = Colors.redAccent;
                       break;
                     case 'media':
-                      priorityColor = Colors.orangeAccent;
+                      priorityColor = const Color(0xFFFFD700);
                       break;
                     case 'baja':
                       priorityColor = Colors.greenAccent;
@@ -235,7 +325,6 @@ class _DashboardPageState extends State<DashboardPage> {
                       priorityColor = Colors.white;
                   }
 
-                  // 🗑️ IMPLEMENTACIÓN DE DISMISSIBLE PARA ELIMINAR (SWIPE)
                   return Dismissible(
                     key: Key(docId),
                     direction: DismissDirection.endToStart,
@@ -250,22 +339,34 @@ class _DashboardPageState extends State<DashboardPage> {
                         context: context,
                         builder: (BuildContext context) {
                           return AlertDialog(
-                            title: const Text("Confirmar Eliminación"),
+                            backgroundColor: Colors.black87,
+                            title: ShaderMask(
+                              shaderCallback: (bounds) =>
+                                  _tornasolGradient(bounds),
+                              child: const Text(
+                                "Confirmar Eliminación",
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold),
+                              ),
+                            ),
                             content: Text(
-                              "¿Estás seguro de que quieres eliminar la tarea: $title?",
+                              "¿Deseas eliminar la tarea: $title?",
+                              style: const TextStyle(color: Colors.white70),
                             ),
                             actions: <Widget>[
                               TextButton(
                                 onPressed: () =>
                                     Navigator.of(context).pop(false),
-                                child: const Text("Cancelar"),
+                                child: const Text("Cancelar",
+                                    style: TextStyle(color: Colors.white70)),
                               ),
                               TextButton(
                                 onPressed: () =>
                                     Navigator.of(context).pop(true),
                                 child: const Text(
                                   "Eliminar",
-                                  style: TextStyle(color: Colors.red),
+                                  style: TextStyle(color: Colors.redAccent),
                                 ),
                               ),
                             ],
@@ -273,15 +374,19 @@ class _DashboardPageState extends State<DashboardPage> {
                         },
                       );
                     },
-                    onDismissed: (direction) {
-                      _deleteTask(docId);
-                    },
+                    onDismissed: (direction) => _deleteTask(docId),
                     child: Card(
-                      color: Colors.white10,
+                      color: Colors.black54,
+                      shadowColor: Colors.purpleAccent.withOpacity(0.4),
+                      elevation: 6,
                       margin: const EdgeInsets.symmetric(
-                          vertical: 6, horizontal: 4),
+                          vertical: 8, horizontal: 6),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        side: const BorderSide(
+                          width: 4,
+                          color: Color(0xFFFFD700),
+                        ),
+                        borderRadius: BorderRadius.circular(18),
                       ),
                       child: ListTile(
                         onTap: () => _editTask(docId, task),
@@ -293,12 +398,11 @@ class _DashboardPageState extends State<DashboardPage> {
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        // 🔥 MODIFICACIÓN: Usar Column para mostrar Materia y Fecha de Vencimiento
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Materia: $materia', // 🔥 Mostrar la materia aquí
+                              'Materia: $materia',
                               style: const TextStyle(
                                 color: Colors.cyan,
                                 fontSize: 14,
@@ -318,8 +422,6 @@ class _DashboardPageState extends State<DashboardPage> {
                                   ),
                           ],
                         ),
-                        // FIN DE LA MODIFICACIÓN
-
                         trailing: Text(
                           priority.toUpperCase(),
                           style: TextStyle(
