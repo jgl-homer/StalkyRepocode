@@ -1,78 +1,153 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Taskify: Login</title>
-  <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
-  <style>
-    /* [MISMO CSS CYBERPUNK DE index.html AQUÍ] */
-    :root {
-      /* ... */
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Taskify: Login</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* COLORES: Fondo Negro, Dorado Primario (#FFD700), Cian de Acento (#00FFFF) */
+        :root {
+            --primary-gold: #FFD700;
+            --accent-cyan: #00FFFF;
+            --dark-bg: #111111;
+            --darker-bg: #000000;
+            --text-light: #EEEEEE;
+        }
 
-    body {
-      /* ... */
-    }
-
-    .container {
-      max-width: 400px;
-      /* Más pequeño para login */
-      /* ... */
-    }
-
-    /* ... (Copiar todo el bloque <style> de index.html) ... */
-  </style>
-
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+        body { 
+            font-family: 'Roboto Mono', monospace, Arial, sans-serif; 
+            background-color: var(--darker-bg); 
+            padding: 20px; 
+            color: var(--text-light);
+        }
+        .container { 
+            max-width: 400px; /* Tamaño optimizado para formularios */
+            margin: 50px auto; 
+            background: var(--dark-bg); 
+            padding: 30px; 
+            border-radius: 8px; 
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.4); /* Sombra neón cian */
+        }
+        h1 { 
+            color: var(--primary-gold); 
+            text-align: center; 
+            margin-bottom: 25px; 
+            text-shadow: 0 0 8px var(--primary-gold); 
+        }
+        input[type="text"], input[type="email"], input[type="password"] { 
+            width: calc(100% - 24px); 
+            padding: 12px; 
+            border: 2px solid var(--accent-cyan); 
+            border-radius: 4px; 
+            font-size: 16px; 
+            background-color: #222; 
+            color: var(--text-light); 
+            margin-top: 15px; 
+        }
+        button { 
+            padding: 12px 20px; 
+            background-color: var(--primary-gold); 
+            color: var(--darker-bg); 
+            border: none; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            font-size: 16px; 
+            font-weight: bold;
+            transition: background-color 0.3s, box-shadow 0.3s; 
+            width: 100%; 
+            margin-top: 15px;
+        }
+        button:hover { 
+            background-color: #e6c500; 
+            box-shadow: 0 0 8px var(--primary-gold); 
+        }
+        .error-msg { 
+            color: #FF5733; 
+            text-align: center; 
+            margin-bottom: 15px; 
+        }
+        /* Estilos no usados en Login, pero necesarios para otros archivos */
+        .input-group { display: flex; margin-bottom: 20px; }
+        #lista-tareas { list-style: none; padding: 0; max-width: 600px; margin: 0 auto;}
+        #lista-tareas li { 
+            padding: 12px; 
+            border-left: 5px solid var(--accent-cyan); 
+            border-radius: 4px; 
+            margin-bottom: 8px; 
+        }
+        .delete-btn { background-color: #C70039; }
+        .logout-btn { background-color: var(--accent-cyan); }
+    </style>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
 </head>
-
 <body>
-  <div class="container">
-    <h1>LOGIN // ACCESO AL SISTEMA</h1>
-    <div id="error-message" style="color: #FF5733; margin-bottom: 15px;"></div>
+    <div class="container">
+        <h1>LOGIN // ACCESO AL SISTEMA</h1>
+        <div id="error-message" class="error-msg"></div>
+        
+        <input type="email" id="email" placeholder="[ CORREO ELECTRÓNICO ]">
+        <input type="password" id="password" placeholder="[ CONTRASEÑA ]">
+        
+        <button onclick="iniciarSesion()" style="margin-top: 25px;">INICIAR SESIÓN</button>
+        <button onclick="window.location.href='register.html';" style="background-color: var(--accent-cyan); color: var(--darker-bg);">CREAR CUENTA</button>
+    </div>
 
-    <input type="email" id="email" placeholder="[ Correo Electrónico ]" class="input-field">
-    <input type="password" id="password" placeholder="[ Contraseña ]" class="input-field" style="margin-top: 15px;">
+    <script>
+        // TUS CREDENCIALES COMPLETAS
+        const firebaseConfig = {
+            apiKey: "AIzaSyCf9kfwpoXH5yqnr643vm4gQxXK3Sexb_Q",
+            authDomain: "to-do-taskingcheck.firebaseapp.com",
+            projectId: "to-do-taskingcheck",
+            storageBucket: "to-do-taskingcheck.firebasestorage.app",
+            messagingSenderId: "540678482428",
+            appId: "1:540678482428:web:824c1ff93834dba0f56a79",
+            databaseURL: "https://to-do-taskingcheck-default-rtdb.firebaseio.com"
+        };
+        
+        let auth; // Declaramos auth globalmente para usarlo en la función iniciarSesion
+        
+        // CORRECCIÓN: Inicializamos Firebase solo cuando el DOM está completamente cargado
+        document.addEventListener('DOMContentLoaded', function() {
+            try {
+                const app = firebase.initializeApp(firebaseConfig);
+                auth = app.auth(); 
+                
+                // Redirigir si el usuario ya está logueado
+                auth.onAuthStateChanged(user => {
+                    if (user) {
+                        window.location.href = 'dashboard.html';
+                    }
+                });
 
-    <button onclick="iniciarSesion()" style="margin-top: 25px;">INICIAR SESIÓN</button>
-    <button onclick="window.location.href='register.html';"
-      style="margin-top: 15px; background-color: #00FFFF; color: black;">REGISTRARSE</button>
-  </div>
+            } catch (error) {
+                console.error("Error al inicializar Firebase:", error);
+                mostrarError("Error interno: No se pudo conectar a Firebase.");
+            }
+        });
 
-  <script>
-    // TUS CREDENCIALES COMPLETAS (el mismo bloque que en index.html)
-    const firebaseConfig = { /* ... */ };
-    const app = firebase.initializeApp(firebaseConfig);
-    const auth = app.auth();
+        function mostrarError(mensaje) {
+            document.getElementById('error-message').textContent = mensaje;
+        }
 
-    // Redireccionar si ya está logueado
-    auth.onAuthStateChanged(user => {
-      if (user) {
-        window.location.href = 'index.html';
-      }
-    });
+        async function iniciarSesion() {
+            if (!auth) {
+                mostrarError("El sistema no está listo. Intenta recargar.");
+                return;
+            }
 
-    function mostrarError(mensaje) {
-      document.getElementById('error-message').textContent = mensaje;
-    }
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            mostrarError(''); 
 
-    async function iniciarSesion() {
-      const email = document.getElementById('email').value;
-      const password = document.getElementById('password').value;
-      mostrarError('');
-
-      try {
-        await auth.signInWithEmailAndPassword(email, password);
-        // La redirección a index.html ocurre en el onAuthStateChanged
-      } catch (error) {
-        console.error(error);
-        mostrarError('Error de Login: ' + error.message);
-      }
-    }
-  </script>
+            try {
+                await auth.signInWithEmailAndPassword(email, password);
+            } catch (error) {
+                mostrarError('Error de Login: ' + error.message);
+            }
+        }
+    </script>
 </body>
-
 </html>
