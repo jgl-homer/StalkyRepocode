@@ -1,15 +1,17 @@
 // 📁 lib/add_task_page.dart
+// ✨ Diseño Tornasol + Lógica avanzada del add + Dropdown del edit + SnackBars visuales con íconos coloridos
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'services/notification_service.dart';
 
-// --- COLORES CYBERPUNK ---
+// 🎨 COLORES CYBERPUNK TORNASOL
 const Color _primaryGold = Color(0xFFFFD700);
+const Color _accentPurple = Color(0xFFB300FF);
 const Color _accentCyan = Colors.cyanAccent;
 const Color _darkBackground = Colors.black;
-// -------------------------
 
 class AddTaskPage extends StatefulWidget {
   const AddTaskPage({super.key});
@@ -21,15 +23,28 @@ class AddTaskPage extends StatefulWidget {
 class _AddTaskPageState extends State<AddTaskPage>
     with SingleTickerProviderStateMixin {
   final TextEditingController _titleController = TextEditingController();
-  final TextEditingController _materiaController =
-      TextEditingController(text: 'General');
+  final TextEditingController _descriptionController = TextEditingController();
+
+  String _selectedMateria = 'General';
   String _selectedPriority = 'media';
   DateTime? _selectedDueDate;
   bool _isSaving = false;
 
   final NotificationService _notificationService = NotificationService();
-
   late AnimationController _controller;
+
+  final List<String> _materiasList = [
+    'General',
+    'CONCIENCIA HISTORICA 2. MEXICO DURANTE',
+    'INGLES V',
+    'METODOS DE INVESTIGACION II',
+    'TEMAS SELECTOS DE MATEMATICAS II',
+    'LA ENERGIA EN LOS PROCESOS DE LA VIDA DIARIA',
+    'IMPLEMETA APLICACIONES WEB',
+    'CONSTRUYE BASE DE DATOS',
+    'FORMACION SOCIOEMOCIONAL V',
+    'APLICA A LA ADMINISTRACION',
+  ];
 
   @override
   void initState() {
@@ -43,34 +58,84 @@ class _AddTaskPageState extends State<AddTaskPage>
   void dispose() {
     _controller.dispose();
     _titleController.dispose();
-    _materiaController.dispose();
+    _descriptionController.dispose();
     super.dispose();
   }
 
-  // 🔥 LÓGICA RESTAURADA: Determina el intervalo de repetición automáticamente
-  int _determineIntervalMinutes(DateTime dueDate) {
-    final totalDuration = dueDate.difference(DateTime.now());
-
-    if (totalDuration.isNegative) return 0;
-
-    if (totalDuration.inHours >= 8) {
-      return 240; // 4 horas
-    } else if (totalDuration.inHours >= 4) {
-      return 120; // 2 horas
-    } else if (totalDuration.inHours >= 1) {
-      return 30; // 30 minutos
-    } else {
-      return 15; // 15 minutos
-    }
+  // 🚨 SnackBar de error personalizado
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: Colors.redAccent.shade700,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        content: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded,
+                color: Colors.white, size: 26),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
+  // ✅ SnackBar de éxito con ícono verde
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: Colors.green.shade600,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_outline,
+                color: Colors.white, size: 26),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 🔥 Determina el intervalo automático de notificaciones
+  int _determineIntervalMinutes(DateTime dueDate) {
+    final totalDuration = dueDate.difference(DateTime.now());
+    if (totalDuration.isNegative) return 0;
+    if (totalDuration.inHours >= 8) return 240;
+    if (totalDuration.inHours >= 4) return 120;
+    if (totalDuration.inHours >= 1) return 30;
+    return 15;
+  }
+
+  // 📅 Selector de fecha y hora
   Future<void> _selectDateTime(BuildContext context) async {
-    final DateTime now = DateTime.now();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
     final DateTime? date = await showDatePicker(
       context: context,
       initialDate: _selectedDueDate ?? now,
-      firstDate: DateTime(now.year, now.month, now.day),
-      lastDate: DateTime(now.year + 5),
+      firstDate: today,
+      lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
       builder: (context, child) {
         return Theme(
           data: ThemeData.dark().copyWith(
@@ -88,9 +153,7 @@ class _AddTaskPageState extends State<AddTaskPage>
     if (date != null) {
       final TimeOfDay? time = await showTimePicker(
         context: context,
-        initialTime: _selectedDueDate != null
-            ? TimeOfDay.fromDateTime(_selectedDueDate!)
-            : TimeOfDay.now(),
+        initialTime: TimeOfDay.now(),
         builder: (context, child) {
           return Theme(
             data: ThemeData.dark().copyWith(
@@ -108,133 +171,111 @@ class _AddTaskPageState extends State<AddTaskPage>
       if (time != null) {
         final newDueDate =
             DateTime(date.year, date.month, date.day, time.hour, time.minute);
-        if (newDueDate.isAfter(now)) {
-          setState(() => _selectedDueDate = newDueDate);
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('La fecha no puede ser pasada.')),
-          );
+        if (newDueDate.isBefore(now)) {
+          _showErrorSnackBar(
+              'La fecha y hora de vencimiento no puede ser en el pasado.');
+          return;
         }
+        setState(() => _selectedDueDate = newDueDate);
       }
     }
   }
 
-  // 🔥 MÉTODO _saveTask CON LÓGICA DE NOTIFICACIONES AVANZADA RESTAURADA
+  // 💾 Guarda la tarea en Firestore y programa notificaciones
   Future<void> _saveTask() async {
     if (_isSaving) return;
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    final String title = _titleController.text.trim();
+    final title = _titleController.text.trim();
     if (title.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Por favor escribe un título.')),
-      );
+      _showErrorSnackBar('El título de la tarea no puede estar vacío.');
+      return;
+    }
+
+    if (_selectedDueDate == null) {
+      _showErrorSnackBar('Debes seleccionar una fecha y hora de vencimiento.');
       return;
     }
 
     setState(() => _isSaving = true);
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      setState(() => _isSaving = false);
+      _showErrorSnackBar('No se pudo identificar al usuario.');
+      return;
+    }
 
-    final String materia = _materiaController.text.trim().isEmpty
-        ? 'General'
-        : _materiaController.text.trim();
+    final description = _descriptionController.text.trim();
 
-    final newTask = {
+    final taskData = {
       'title': title,
-      'materia': materia,
+      'materia': _selectedMateria,
+      'description': description,
       'priority': _selectedPriority,
-      'dueDate': _selectedDueDate != null
-          ? Timestamp.fromDate(_selectedDueDate!)
-          : null,
-      'createdAt': Timestamp.now(),
+      'dueDate': Timestamp.fromDate(_selectedDueDate!),
+      'createdAt': FieldValue.serverTimestamp(),
     };
 
     try {
-      final docRef = await FirebaseFirestore.instance
+      final taskRef = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .collection('tasks')
-          .add(newTask);
+          .add(taskData);
 
-      // --- 🔔 LÓGICA CLAVE DE PROGRAMACIÓN MÚLTIPLE DE NOTIFICACIONES RESTAURADA ---
-      if (_selectedDueDate != null) {
-        final Duration totalDuration =
-            _selectedDueDate!.difference(DateTime.now());
-        final String taskIdString = docRef.id;
-        final int baseNotificationId = taskIdString.hashCode.abs() % 1000000;
+      final int baseNotificationId = taskRef.id.hashCode.abs() % 1000000;
 
-        if (totalDuration.inMinutes < 15) {
-          // Si faltan menos de 15 minutos, solo se programa la notificación final
-          final int notificationId = baseNotificationId + 0;
+      final Duration totalDuration =
+          _selectedDueDate!.difference(DateTime.now());
+      if (totalDuration.inMinutes >= 15) {
+        final int intervalInMinutes =
+            _determineIntervalMinutes(_selectedDueDate!);
+        DateTime currentTime = DateTime.now().add(const Duration(minutes: 1));
+        int counter = 0;
+
+        while (currentTime.isBefore(_selectedDueDate!) && counter < 10) {
+          final notificationId = baseNotificationId + counter;
+          final remaining = _selectedDueDate!.difference(currentTime).inMinutes;
+          final String timeStr = remaining > 60
+              ? '${(remaining / 60).floor()} horas'
+              : '$remaining minutos';
 
           await _notificationService.scheduleNotification(
             notificationId,
-            '🚨 ¡Último Recordatorio!',
-            'Tu tarea "$title" vence AHORA. ¡Es hora de completarla!',
-            _selectedDueDate!,
+            '🔔 Recordatorio de "$title"',
+            'Faltan $timeStr para el vencimiento.',
+            currentTime,
           );
-        } else {
-          // Si el tiempo es mayor, programamos recordatorios en bucle
-          final int intervalInMinutes =
-              _determineIntervalMinutes(_selectedDueDate!);
 
-          if (intervalInMinutes > 0) {
-            DateTime currentTime = DateTime.now();
-            final DateTime finalDueDate = _selectedDueDate!;
-            int notificationCounter = 0;
-
-            // Bucle que programa notificaciones espaciadas hasta la fecha de vencimiento
-            while (currentTime.isBefore(finalDueDate)) {
-              final int notificationId =
-                  baseNotificationId + notificationCounter;
-
-              final Duration remainingTime = finalDueDate.difference(
-                currentTime,
-              );
-              final String remainingTimeString = remainingTime.inMinutes > 60
-                  ? '${remainingTime.inHours} horas'
-                  : '${remainingTime.inMinutes} minutos';
-
-              await _notificationService.scheduleNotification(
-                notificationId,
-                '🔔 Recordatorio Constante: $title',
-                '¡Faltan $remainingTimeString! (Recordatorio cada $intervalInMinutes min.)',
-                currentTime,
-              );
-
-              // Avanzamos al siguiente intervalo
-              currentTime = currentTime.add(
-                Duration(minutes: intervalInMinutes),
-              );
-              notificationCounter++;
-            }
-          }
+          currentTime = currentTime.add(Duration(minutes: intervalInMinutes));
+          counter++;
         }
+      } else {
+        await _notificationService.scheduleNotification(
+          baseNotificationId,
+          '🚨 Último Recordatorio',
+          'Tu tarea "$title" vence ahora.',
+          _selectedDueDate!,
+        );
       }
-      // --- FIN DE LA LÓGICA DE NOTIFICACIONES ---
+
+      _showSuccessSnackBar('✅ Tarea guardada correctamente.');
 
       if (mounted) Navigator.pop(context);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Error: $e')));
-        setState(() => _isSaving = false);
-      }
+      _showErrorSnackBar('Error al guardar la tarea: $e');
+      setState(() => _isSaving = false);
     }
   }
-  // 🔥 FIN DEL MÉTODO _saveTask
 
-  InputDecoration _getInputDecoration(String label, {String? hint}) {
+  // 🎨 DECORACIÓN DE CAMPOS CYBERPUNK
+  InputDecoration _inputStyle(String label, {String? hint}) {
     return InputDecoration(
       labelText: label,
       hintText: hint,
       labelStyle: const TextStyle(color: _accentCyan),
-      hintStyle: const TextStyle(color: Colors.white30),
-      contentPadding:
-          const EdgeInsets.symmetric(vertical: 15.0, horizontal: 10.0),
+      hintStyle: const TextStyle(color: Colors.white38),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: Colors.white38, width: 1),
+        borderSide: const BorderSide(color: Colors.white38),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
@@ -243,19 +284,19 @@ class _AddTaskPageState extends State<AddTaskPage>
     );
   }
 
-  Widget animatedButton({required String text, required VoidCallback onTap}) {
+  // ✨ BOTÓN ANIMADO
+  Widget _animatedButton(String text, VoidCallback onTap) {
     return AnimatedBuilder(
       animation: _controller,
-      builder: (context, child) {
-        final color1 = Color.lerp(const Color(0xFFFFD700),
-            const Color(0xFFB300FF), _controller.value)!;
-        final color2 = Color.lerp(const Color(0xFFB300FF),
-            const Color(0xFFFFD700), _controller.value)!;
+      builder: (context, _) {
+        final color1 =
+            Color.lerp(_primaryGold, _accentPurple, _controller.value)!;
+        final color2 =
+            Color.lerp(_accentPurple, _primaryGold, _controller.value)!;
         return InkWell(
-          borderRadius: BorderRadius.circular(30),
           onTap: _isSaving ? null : onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 500),
+          borderRadius: BorderRadius.circular(30),
+          child: Container(
             padding: const EdgeInsets.symmetric(vertical: 16),
             alignment: Alignment.center,
             decoration: BoxDecoration(
@@ -270,10 +311,9 @@ class _AddTaskPageState extends State<AddTaskPage>
             child: Text(
               text,
               style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18),
             ),
           ),
         );
@@ -281,7 +321,8 @@ class _AddTaskPageState extends State<AddTaskPage>
     );
   }
 
-  Widget animatedCalendarButton() {
+  // 📅 BOTÓN DE CALENDARIO ANIMADO
+  Widget _animatedCalendarButton() {
     String formatDate(DateTime? date) {
       if (date == null) return 'Seleccionar Fecha y Hora';
       return DateFormat('dd/MM/yyyy h:mm a').format(date);
@@ -289,23 +330,21 @@ class _AddTaskPageState extends State<AddTaskPage>
 
     return AnimatedBuilder(
       animation: _controller,
-      builder: (context, child) {
-        final color1 = Color.lerp(const Color(0xFF9C27B0),
-            const Color(0xFFB300FF), _controller.value)!;
-        final color2 = Color.lerp(const Color(0xFFB300FF),
-            const Color(0xFF9C27B0), _controller.value)!;
+      builder: (context, _) {
+        final color1 =
+            Color.lerp(_accentPurple, _primaryGold, _controller.value)!;
+        final color2 =
+            Color.lerp(_primaryGold, _accentPurple, _controller.value)!;
         return InkWell(
-          borderRadius: BorderRadius.circular(12),
           onTap: _isSaving ? null : () => _selectDateTime(context),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 500),
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
             padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [color1, color2],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+                  colors: [color1, color2],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: _accentCyan, width: 2),
             ),
@@ -315,11 +354,10 @@ class _AddTaskPageState extends State<AddTaskPage>
                 Text(
                   formatDate(_selectedDueDate),
                   style: TextStyle(
-                    color: _selectedDueDate == null
-                        ? Colors.white70
-                        : Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
+                      color: _selectedDueDate == null
+                          ? Colors.white70
+                          : Colors.white,
+                      fontWeight: FontWeight.bold),
                 ),
                 const Icon(Icons.calendar_today, color: Colors.white),
               ],
@@ -335,11 +373,9 @@ class _AddTaskPageState extends State<AddTaskPage>
     return Scaffold(
       backgroundColor: _darkBackground,
       appBar: AppBar(
-        title: const Text(
-          'Agregar Tarea',
-          style: TextStyle(color: _accentCyan, fontWeight: FontWeight.bold),
-        ),
         backgroundColor: _darkBackground,
+        title: const Text('Agregar Tarea',
+            style: TextStyle(color: _accentCyan, fontWeight: FontWeight.bold)),
         iconTheme: const IconThemeData(color: _accentCyan),
       ),
       body: Stack(
@@ -366,18 +402,11 @@ class _AddTaskPageState extends State<AddTaskPage>
                 TextField(
                   controller: _titleController,
                   style: const TextStyle(color: Colors.white),
-                  decoration: _getInputDecoration('Título de la tarea'),
+                  decoration: _inputStyle('Título de la tarea'),
                 ),
                 const SizedBox(height: 20),
-                TextField(
-                  controller: _materiaController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: _getInputDecoration(
-                    'Materia',
-                    hint: 'Ej: Matemáticas, Inglés, General',
-                  ),
-                ),
-                const SizedBox(height: 30),
+
+                // 🎓 Dropdown de materia
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -388,60 +417,99 @@ class _AddTaskPageState extends State<AddTaskPage>
                   ),
                   child: Row(
                     children: [
-                      const Text(
-                        'Prioridad:',
-                        style: TextStyle(color: _accentCyan, fontSize: 16),
-                      ),
+                      const Text('Materia:',
+                          style: TextStyle(color: _accentCyan, fontSize: 16)),
                       const SizedBox(width: 20),
                       Expanded(
                         child: DropdownButton<String>(
-                          value: _selectedPriority,
+                          value: _selectedMateria,
                           dropdownColor: Colors.grey[900],
+                          underline: Container(),
                           style: const TextStyle(
                               color: Colors.white, fontSize: 16),
-                          underline: Container(),
-                          icon: const Icon(
-                            Icons.arrow_drop_down,
-                            color: _primaryGold,
-                          ),
+                          icon: const Icon(Icons.arrow_drop_down,
+                              color: _primaryGold),
                           isExpanded: true,
-                          items: ['baja', 'media', 'alta'].map((String value) {
-                            Color itemColor = Colors.white;
-                            if (value == 'alta') itemColor = Colors.redAccent;
-                            if (value == 'media') itemColor = _primaryGold;
-                            if (value == 'baja') itemColor = Colors.greenAccent;
-
-                            return DropdownMenuItem<String>(
+                          items: _materiasList.map((value) {
+                            return DropdownMenuItem(
                               value: value,
-                              child: Text(
-                                value.toUpperCase(),
-                                style: TextStyle(
-                                    color: itemColor,
-                                    fontWeight: FontWeight.bold),
-                              ),
+                              child: Text(value,
+                                  style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold)),
                             );
                           }).toList(),
                           onChanged: _isSaving
                               ? null
-                              : (String? newValue) {
-                                  if (newValue != null) {
-                                    setState(() {
-                                      _selectedPriority = newValue;
-                                    });
-                                  }
-                                },
+                              : (newValue) =>
+                                  setState(() => _selectedMateria = newValue!),
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 30),
-                animatedCalendarButton(),
-                const SizedBox(height: 50),
-                animatedButton(
-                  text: _isSaving ? 'GUARDANDO...' : 'GUARDAR TAREA',
-                  onTap: _isSaving ? () {} : _saveTask,
+
+                const SizedBox(height: 20),
+                TextField(
+                  controller: _descriptionController,
+                  style: const TextStyle(color: Colors.white),
+                  maxLines: 3,
+                  decoration: _inputStyle('Descripción (opcional)'),
                 ),
+                const SizedBox(height: 30),
+
+                // Dropdown de prioridad
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.white38, width: 1),
+                    borderRadius: BorderRadius.circular(10),
+                    color: _darkBackground.withOpacity(0.5),
+                  ),
+                  child: Row(
+                    children: [
+                      const Text('Prioridad:',
+                          style: TextStyle(color: _accentCyan, fontSize: 16)),
+                      const SizedBox(width: 20),
+                      Expanded(
+                        child: DropdownButton<String>(
+                          value: _selectedPriority,
+                          dropdownColor: Colors.grey[900],
+                          underline: Container(),
+                          style: const TextStyle(
+                              color: Colors.white, fontSize: 16),
+                          icon: const Icon(Icons.arrow_drop_down,
+                              color: _primaryGold),
+                          isExpanded: true,
+                          items: ['baja', 'media', 'alta'].map((value) {
+                            Color itemColor = Colors.white;
+                            if (value == 'alta') itemColor = Colors.redAccent;
+                            if (value == 'media') itemColor = _primaryGold;
+                            if (value == 'baja') itemColor = Colors.greenAccent;
+                            return DropdownMenuItem(
+                              value: value,
+                              child: Text(value.toUpperCase(),
+                                  style: TextStyle(
+                                      color: itemColor,
+                                      fontWeight: FontWeight.bold)),
+                            );
+                          }).toList(),
+                          onChanged: _isSaving
+                              ? null
+                              : (newValue) =>
+                                  setState(() => _selectedPriority = newValue!),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 30),
+                _animatedCalendarButton(),
+                const SizedBox(height: 50),
+                _animatedButton(
+                    _isSaving ? 'GUARDANDO...' : 'AGREGAR TAREA', _saveTask),
               ],
             ),
           ),

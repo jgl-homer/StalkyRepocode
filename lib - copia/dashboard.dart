@@ -5,9 +5,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'dart:math';
+// Importación de lógica para agrupación por materia
 import 'package:diacritic/diacritic.dart';
 
-// Importaciones con alias
+// Importaciones con alias para evitar conflicto de nombres
 import 'add_task_page.dart' as addPage;
 import 'edit_task_page.dart' as editPage;
 import 'profile.dart';
@@ -39,7 +40,7 @@ class _DashboardPageState extends State<DashboardPage>
     super.dispose();
   }
 
-  // 🎨 Gradiente Tornasol
+  // 🎨 Gradiente tornasol dorado-morado (animado)
   Shader _tornasolGradient(Rect bounds) {
     return LinearGradient(
       colors: const [Color(0xFFFFD700), Color(0xFFB300FF)],
@@ -49,7 +50,7 @@ class _DashboardPageState extends State<DashboardPage>
     ).createShader(bounds);
   }
 
-  // 🗑️ Eliminar tarea
+  // 🗑️ ELIMINAR TAREA
   Future<void> _deleteTask(String docId) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -68,13 +69,13 @@ class _DashboardPageState extends State<DashboardPage>
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al eliminar: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error al eliminar: $e')));
     }
   }
 
-  // ✏️ Editar tarea
+  // 📝 EDITAR TAREA — usa el alias editPage
   void _editTask(String docId, Map<String, dynamic> currentTaskData) {
     Navigator.push(
       context,
@@ -93,8 +94,10 @@ class _DashboardPageState extends State<DashboardPage>
     if (user == null) {
       return const Scaffold(
         body: Center(
-          child: Text('Usuario no autenticado',
-              style: TextStyle(color: Colors.white)),
+          child: Text(
+            'Usuario no autenticado',
+            style: TextStyle(color: Colors.white),
+          ),
         ),
       );
     }
@@ -112,17 +115,21 @@ class _DashboardPageState extends State<DashboardPage>
               child: const Text(
                 'Taskify',
                 style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 24),
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 24,
+                ),
               ),
             ),
             backgroundColor: Colors.black,
             actions: [
               Padding(
                 padding: const EdgeInsets.only(right: 15.0),
-                child:
-                    Image.asset('assets/logo/icon.png', height: 32, width: 32),
+                child: Image.asset(
+                  'assets/logo/icon.png',
+                  height: 32,
+                  width: 32,
+                ),
               ),
             ],
           ),
@@ -175,7 +182,11 @@ class _DashboardPageState extends State<DashboardPage>
                           ),
                         ),
                         child: const Center(
-                          child: Icon(Icons.add, size: 36, color: Colors.black),
+                          child: Icon(
+                            Icons.add,
+                            size: 36,
+                            color: Colors.black,
+                          ),
                         ),
                       ),
                     );
@@ -210,7 +221,6 @@ class _DashboardPageState extends State<DashboardPage>
     );
   }
 
-  // 📋 Construcción de tareas agrupadas
   Widget _buildTasksPage(User user) {
     final tasksStream = FirebaseFirestore.instance
         .collection('users')
@@ -224,26 +234,32 @@ class _DashboardPageState extends State<DashboardPage>
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
-              child: CircularProgressIndicator(color: Color(0xFFFFD700)));
+            child: CircularProgressIndicator(color: Color(0xFFFFD700)),
+          );
         }
 
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return const Center(
-            child: Text('No hay tareas disponibles',
-                style: TextStyle(color: Colors.white70)),
+            child: Text(
+              'No hay tareas disponibles',
+              style: TextStyle(color: Colors.white70),
+            ),
           );
         }
 
+        // --- AGRUPACIÓN POR MATERIA ---
         final tasks = snapshot.data!.docs;
         final Map<String, List<QueryDocumentSnapshot>> groupedTasks = {};
 
         for (var doc in tasks) {
-          final data = doc.data() as Map<String, dynamic>? ?? {};
-          final String rawMateria = data['materia'] ?? 'General';
+          final taskData = doc.data() as Map<String, dynamic>? ?? {};
+          final String rawMateria = taskData['materia'] ?? 'General';
           final String materiaKey =
               removeDiacritics(rawMateria.trim().toLowerCase());
 
-          groupedTasks[materiaKey] ??= [];
+          if (groupedTasks[materiaKey] == null) {
+            groupedTasks[materiaKey] = [];
+          }
           groupedTasks[materiaKey]!.add(doc);
         }
 
@@ -260,6 +276,7 @@ class _DashboardPageState extends State<DashboardPage>
                 (tasksInMateria[0].data() as Map<String, dynamic>? ??
                         {})['materia'] ??
                     'General';
+            if (displayMateria.isEmpty) displayMateria = 'General';
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -276,13 +293,14 @@ class _DashboardPageState extends State<DashboardPage>
                     ),
                   ),
                 ),
-                ...tasksInMateria.map((doc) {
-                  final task = doc.data() as Map<String, dynamic>? ?? {};
+                ...List.generate(tasksInMateria.length, (taskIndex) {
+                  final doc = tasksInMateria[taskIndex];
                   final docId = doc.id;
+                  final task = doc.data() as Map<String, dynamic>? ?? {};
+
                   final title = task['title'] ?? 'Sin título';
                   final priority = task['priority'] ?? 'media';
                   final materia = task['materia'] ?? 'General';
-                  final description = (task['description'] ?? '').toString();
 
                   DateTime? dueDate;
                   String dueDateFormatted = '';
@@ -293,7 +311,7 @@ class _DashboardPageState extends State<DashboardPage>
                   }
 
                   Color priorityColor;
-                  switch (priority.toLowerCase()) {
+                  switch (priority) {
                     case 'alta':
                       priorityColor = Colors.redAccent;
                       break;
@@ -319,7 +337,7 @@ class _DashboardPageState extends State<DashboardPage>
                     confirmDismiss: (direction) async {
                       return await showDialog(
                         context: context,
-                        builder: (context) {
+                        builder: (BuildContext context) {
                           return AlertDialog(
                             backgroundColor: Colors.black87,
                             title: ShaderMask(
@@ -336,7 +354,7 @@ class _DashboardPageState extends State<DashboardPage>
                               "¿Deseas eliminar la tarea: $title?",
                               style: const TextStyle(color: Colors.white70),
                             ),
-                            actions: [
+                            actions: <Widget>[
                               TextButton(
                                 onPressed: () =>
                                     Navigator.of(context).pop(false),
@@ -346,8 +364,10 @@ class _DashboardPageState extends State<DashboardPage>
                               TextButton(
                                 onPressed: () =>
                                     Navigator.of(context).pop(true),
-                                child: const Text("Eliminar",
-                                    style: TextStyle(color: Colors.redAccent)),
+                                child: const Text(
+                                  "Eliminar",
+                                  style: TextStyle(color: Colors.redAccent),
+                                ),
                               ),
                             ],
                           );
@@ -363,7 +383,7 @@ class _DashboardPageState extends State<DashboardPage>
                           vertical: 8, horizontal: 6),
                       shape: RoundedRectangleBorder(
                         side: const BorderSide(
-                          width: 3,
+                          width: 4,
                           color: Color(0xFFFFD700),
                         ),
                         borderRadius: BorderRadius.circular(18),
@@ -384,7 +404,7 @@ class _DashboardPageState extends State<DashboardPage>
                             Text(
                               'Materia: $materia',
                               style: const TextStyle(
-                                color: Colors.cyanAccent,
+                                color: Colors.cyan,
                                 fontSize: 14,
                                 fontWeight: FontWeight.w500,
                               ),
@@ -393,47 +413,13 @@ class _DashboardPageState extends State<DashboardPage>
                             dueDate != null
                                 ? Text(
                                     'Vence: $dueDateFormatted',
-                                    style: const TextStyle(
-                                        color: Colors.white70, fontSize: 13),
+                                    style:
+                                        const TextStyle(color: Colors.white70),
                                   )
-                                : const Text('Sin fecha',
-                                    style: TextStyle(color: Colors.white70)),
-                            // 📝 Descripción multilínea (solo si existe)
-                            if (description.trim().isNotEmpty)
-                              Container(
-                                margin: const EdgeInsets.only(top: 10),
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                    color: Colors.cyanAccent.withOpacity(0.5),
-                                    width: 1,
+                                : const Text(
+                                    'Sin fecha',
+                                    style: TextStyle(color: Colors.white70),
                                   ),
-                                  color: Colors.black.withOpacity(0.3),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      '📝 Descripción:',
-                                      style: TextStyle(
-                                        color: Colors.cyanAccent,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      description,
-                                      style: const TextStyle(
-                                        color: Colors.white70,
-                                        fontSize: 13,
-                                        height: 1.3,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
                           ],
                         ),
                         trailing: Text(
@@ -446,7 +432,7 @@ class _DashboardPageState extends State<DashboardPage>
                       ),
                     ),
                   );
-                }).toList(),
+                }),
               ],
             );
           },
