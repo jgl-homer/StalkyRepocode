@@ -4,12 +4,27 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'services/notification_service.dart';
+import 'package:flutter/services.dart'; 
 
 // --- COLORES CYBERPUNK ---
 const Color _primaryGold = Color(0xFFFFD700);
 const Color _accentCyan = Colors.cyanAccent;
 const Color _darkBackground = Colors.black;
 // -------------------------
+
+// --- Lista de Materias ---
+final List<String> kMateriasList = [
+  'General',
+  'CONCIENCIA HISTORICA 2. MEXICO DURANTE',
+  'INGLES V',
+  'METODOS DE INVESTIGACION II',
+  'TEMAS SELECTOS DE MATEMATICAS II',
+  'LA ENERGIA EN LOS PROCESOS DE LA VIDA DIARIA',
+  'IMPLEMETA APLICACIONES WEB',
+  'CONSTRUYE BASE DE DATOS',
+  'FORMACION SOCIOEMOCIONAL V',
+  'APLICA A LA ADMINISTRACION',
+];
 
 class EditTaskPage extends StatefulWidget {
   final String taskId;
@@ -25,25 +40,27 @@ class EditTaskPage extends StatefulWidget {
   State<EditTaskPage> createState() => _EditTaskPageState();
 }
 
-// 🔥 AGREGAR: SingleTickerProviderStateMixin para animaciones
 class _EditTaskPageState extends State<EditTaskPage>
     with SingleTickerProviderStateMixin {
+  
+  // --- Controladores ---
   late TextEditingController _titleController;
-  late TextEditingController _materiaController;
+  late TextEditingController _descriptionController; 
+  final TextEditingController _subtaskController = TextEditingController();
+
+  // --- Estado ---
+  String? _selectedMateria; 
   late String _selectedPriority;
   late DateTime? _selectedDueDate;
-
   bool _isSaving = false;
+  List<Map<String, dynamic>> _subtasks = []; 
 
   final NotificationService _notificationService = NotificationService();
-
-  // 🔥 AGREGAR: Controlador de animación
   late AnimationController _controller;
 
   @override
   void initState() {
     super.initState();
-    // 🔥 INICIALIZAR: Controlador de animación para los botones
     _controller =
         AnimationController(vsync: this, duration: const Duration(seconds: 6))
           ..repeat();
@@ -51,50 +68,53 @@ class _EditTaskPageState extends State<EditTaskPage>
     _titleController = TextEditingController(
       text: widget.initialData['title'] ?? '',
     );
-    _materiaController = TextEditingController(
-      text: widget.initialData['materia'] ?? 'General',
+    _descriptionController = TextEditingController( 
+      text: widget.initialData['description'] ?? '',
     );
+    _selectedMateria = widget.initialData['materia'] ?? 'General';
+    if (!kMateriasList.contains(_selectedMateria)) {
+      _selectedMateria = 'General';
+    }
     _selectedPriority = widget.initialData['priority'] ?? 'media';
 
     if (widget.initialData['dueDate'] != null &&
         widget.initialData['dueDate'] is Timestamp) {
-      _selectedDueDate = (widget.initialData['dueDate'] as Timestamp).toDate();
+      DateTime potentialDate = (widget.initialData['dueDate'] as Timestamp).toDate();
+      if (potentialDate.year != 3000) {
+        _selectedDueDate = potentialDate;
+      } else {
+        _selectedDueDate = null; 
+      }
     } else {
       _selectedDueDate = null;
+    }
+
+    // Cargar sub-tareas existentes
+    if (widget.initialData['subtasks'] != null) {
+      _subtasks = List<Map<String, dynamic>>.from(widget.initialData['subtasks']);
     }
   }
 
   @override
   void dispose() {
-    // 🔥 LIMPIAR: Liberar controlador de animación
     _controller.dispose();
     _titleController.dispose();
-    _materiaController.dispose();
+    _descriptionController.dispose(); 
+    _subtaskController.dispose(); 
     super.dispose();
   }
 
-  // 🔥 LÓGICA AGREGADA: Determina el intervalo de repetición automáticamente
   int _determineIntervalMinutes(DateTime dueDate) {
     final totalDuration = dueDate.difference(DateTime.now());
-
     if (totalDuration.isNegative) return 0;
-
-    if (totalDuration.inHours >= 8) {
-      return 240; // 4 horas
-    } else if (totalDuration.inHours >= 4) {
-      return 120; // 2 horas
-    } else if (totalDuration.inHours >= 1) {
-      return 30; // 30 minutos
-    } else {
-      return 15; // 15 minutos
-    }
+    if (totalDuration.inHours >= 8) return 240;
+    else if (totalDuration.inHours >= 4) return 120;
+    else if (totalDuration.inHours >= 1) return 30;
+    else return 15;
   }
-
-  // Selector combinado de Fecha y Hora (CON TEMA CYBERPUNK)
   Future<void> _selectDateTime(BuildContext context) async {
     final DateTime now = DateTime.now();
     final DateTime todayStart = DateTime(now.year, now.month, now.day);
-
     final DateTime? date = await showDatePicker(
       context: context,
       initialDate: _selectedDueDate ?? now,
@@ -104,21 +124,19 @@ class _EditTaskPageState extends State<EditTaskPage>
         return Theme(
           data: ThemeData.dark().copyWith(
             colorScheme: const ColorScheme.dark(
-              primary: _accentCyan, // Aplicar color
+              primary: _accentCyan, 
               onSurface: Colors.white,
             ),
-            dialogBackgroundColor: _darkBackground, // Aplicar color
+            dialogBackgroundColor: _darkBackground, 
           ),
           child: child!,
         );
       },
     );
-
     if (date != null) {
       TimeOfDay initialTime = _selectedDueDate != null
           ? TimeOfDay.fromDateTime(_selectedDueDate!)
           : TimeOfDay.now();
-
       final TimeOfDay? time = await showTimePicker(
         context: context,
         initialTime: initialTime,
@@ -126,16 +144,15 @@ class _EditTaskPageState extends State<EditTaskPage>
           return Theme(
             data: ThemeData.dark().copyWith(
               colorScheme: const ColorScheme.dark(
-                primary: _accentCyan, // Aplicar color
+                primary: _accentCyan, 
                 onSurface: Colors.white,
               ),
-              dialogBackgroundColor: _darkBackground, // Aplicar color
+              dialogBackgroundColor: _darkBackground, 
             ),
             child: child!,
           );
         },
       );
-
       if (time != null) {
         final DateTime newDueDate = DateTime(
           date.year,
@@ -144,7 +161,6 @@ class _EditTaskPageState extends State<EditTaskPage>
           time.hour,
           time.minute,
         );
-
         if (newDueDate.isBefore(now)) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -155,7 +171,6 @@ class _EditTaskPageState extends State<EditTaskPage>
           }
           return;
         }
-
         setState(() {
           _selectedDueDate = newDueDate;
         });
@@ -163,10 +178,8 @@ class _EditTaskPageState extends State<EditTaskPage>
     }
   }
 
-  // 🔥 MÉTODO _updateTask CON LÓGICA DE NOTIFICACIONES MÚLTIPLES
   Future<void> _updateTask() async {
     if (_isSaving) return;
-
     final String title = _titleController.text.trim();
     if (title.isEmpty) {
       if (mounted) {
@@ -177,111 +190,86 @@ class _EditTaskPageState extends State<EditTaskPage>
       }
       return;
     }
-
-    setState(() {
-      _isSaving = true;
-    });
-
+    setState(() { _isSaving = true; });
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
+      if (mounted) { setState(() { _isSaving = false; }); }
       return;
     }
 
-    final String rawMateria = _materiaController.text.trim();
-    final String materia = rawMateria.isEmpty ? 'General' : rawMateria;
+    final String materia = _selectedMateria ?? 'General';
+    final String description = _descriptionController.text.trim();
 
     final dataToUpdate = {
       'title': title,
-      'materia': materia,
+      'materia': materia, 
+      'description': description, 
       'priority': _selectedPriority,
       'dueDate': _selectedDueDate != null
           ? Timestamp.fromDate(_selectedDueDate!)
-          : null,
+          : Timestamp.fromDate(DateTime(3000)), 
+      'subtasks': _subtasks, 
     };
 
-    // 1. Obtener la ID base para las notificaciones
     final int baseNotificationId = widget.taskId.hashCode.abs() % 1000000;
 
     try {
-      // 2. CANCELAR TODAS LAS NOTIFICACIONES ANTIGUAS RELACIONADAS CON ESTA TAREA
-      // Cancelamos hasta 10 posibles IDs usados en la recurrencia anterior.
-      for (int i = 0; i < 10; i++) {
+      for (int i = 0; i < 50; i++) { 
         await _notificationService.cancelNotification(baseNotificationId + i);
       }
-
-      // 3. Actualización en Firestore
       await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .collection('tasks')
           .doc(widget.taskId)
           .update(dataToUpdate);
-
-      // 4. PROGRAMAR NUEVAS NOTIFICACIONES MÚLTIPLES
       if (_selectedDueDate != null) {
         final Duration totalDuration =
             _selectedDueDate!.difference(DateTime.now());
-
-        if (totalDuration.inMinutes >= 15) {
+        if (totalDuration.inMinutes < 15) {
+          if (totalDuration.inSeconds > 0) { 
+            await _notificationService.scheduleNotification(
+              baseNotificationId + 0,
+              '🚨 ¡Último Recordatorio (Editado)!',
+              'Tu tarea "$title" vence AHORA.',
+              _selectedDueDate!,
+            );
+          }
+        } else {
           final int intervalInMinutes =
               _determineIntervalMinutes(_selectedDueDate!);
-
           if (intervalInMinutes > 0) {
-            DateTime currentTime = DateTime.now().add(
-                const Duration(minutes: 1)); // Empezar 1 min después de ahora
+            DateTime currentTime = DateTime.now();
             final DateTime finalDueDate = _selectedDueDate!;
             int notificationCounter = 0;
-
-            // Bucle que programa notificaciones espaciadas hasta la fecha de vencimiento
-            // Limitamos a 10 notificaciones como máximo para evitar problemas de límite
-            while (currentTime.isBefore(finalDueDate) &&
-                notificationCounter < 10) {
+            while (currentTime.isBefore(finalDueDate) && notificationCounter < 50) { 
               final int notificationId =
                   baseNotificationId + notificationCounter;
-
               final Duration remainingTime =
                   finalDueDate.difference(currentTime);
               final String remainingTimeString = remainingTime.inMinutes > 60
                   ? '${remainingTime.inHours} horas'
                   : '${remainingTime.inMinutes} minutos';
-
               await _notificationService.scheduleNotification(
                 notificationId,
                 '🔄 Recordatorio Constante (Editado): $title',
                 '¡Faltan $remainingTimeString! (Recordatorio cada $intervalInMinutes min.)',
                 currentTime,
               );
-
-              // Avanzamos al siguiente intervalo
               currentTime = currentTime.add(
                 Duration(minutes: intervalInMinutes),
               );
               notificationCounter++;
             }
           }
-        } else if (totalDuration.inSeconds > 0) {
-          // Si faltan menos de 15 minutos, solo se programa la notificación final
-          await _notificationService.scheduleNotification(
-            baseNotificationId,
-            '🚨 ¡Último Recordatorio (Editado)!',
-            'Tu tarea "$title" vence AHORA. ¡Es hora de completarla!',
-            _selectedDueDate!,
-          );
         }
       }
-
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Error al actualizar: $e')));
-
         setState(() {
           _isSaving = false;
         });
@@ -289,7 +277,16 @@ class _EditTaskPageState extends State<EditTaskPage>
     }
   }
 
-  // 🔥 WIDGET: InputDecoration con estilo Cyberpunk
+  void _addSubtask() {
+    final String title = _subtaskController.text.trim();
+    if (title.isNotEmpty) {
+      setState(() {
+        _subtasks.add({"title": title, "completed": false});
+        _subtaskController.clear();
+      });
+    }
+  }
+
   InputDecoration _getInputDecoration(String label, {String? hint}) {
     return InputDecoration(
       labelText: label,
@@ -306,10 +303,12 @@ class _EditTaskPageState extends State<EditTaskPage>
         borderRadius: BorderRadius.circular(10),
         borderSide: const BorderSide(color: _accentCyan, width: 2),
       ),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Colors.white38, width: 1),
+      ),
     );
   }
-
-  // 🔥 WIDGET: Botón animado con degradado dorado/morado
   Widget animatedButton({required String text, required VoidCallback onTap}) {
     return AnimatedBuilder(
       animation: _controller,
@@ -347,14 +346,11 @@ class _EditTaskPageState extends State<EditTaskPage>
       },
     );
   }
-
-  // 🔥 WIDGET: Botón de calendario animado con degradado
   Widget animatedCalendarButton() {
     String formatDate(DateTime? date) {
       if (date == null) return 'Seleccionar Fecha y Hora';
       return DateFormat('dd/MM/yyyy h:mm a').format(date);
     }
-
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
@@ -397,31 +393,29 @@ class _EditTaskPageState extends State<EditTaskPage>
       },
     );
   }
-  // 🔥 FIN DE WIDGETS CYBERPUNK
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _darkBackground, // Aplicar color
+      backgroundColor: _darkBackground, 
       appBar: AppBar(
         title: const Text(
           'Editar Tarea',
           style: TextStyle(
-              color: _accentCyan, fontWeight: FontWeight.bold), // Aplicar color
+              color: _accentCyan, fontWeight: FontWeight.bold), 
         ),
-        backgroundColor: _darkBackground, // Aplicar color
-        iconTheme: const IconThemeData(color: _accentCyan), // Aplicar color
+        backgroundColor: _darkBackground, 
+        iconTheme: const IconThemeData(color: _accentCyan), 
       ),
       body: Stack(
         children: [
-          // Fondo con el logo (similar a AddTaskPage)
           Positioned.fill(
             child: IgnorePointer(
               child: Opacity(
                 opacity: 0.08,
                 child: Center(
                   child: Image.asset(
-                    'assets/logo/icon.png', // Asumiendo que esta ruta existe
+                    'assets/logo/icon.png', 
                     fit: BoxFit.contain,
                     width: MediaQuery.of(context).size.width * 0.7,
                   ),
@@ -434,91 +428,173 @@ class _EditTaskPageState extends State<EditTaskPage>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Campo de Título con estilo Cyberpunk
                 TextField(
                   controller: _titleController,
                   style: const TextStyle(color: Colors.white),
                   decoration: _getInputDecoration('Título de la tarea'),
                 ),
                 const SizedBox(height: 20),
-
-                // Campo de Materia con estilo Cyberpunk
                 TextField(
-                  controller: _materiaController,
+                  controller: _descriptionController,
                   style: const TextStyle(color: Colors.white),
                   decoration: _getInputDecoration(
-                    'Materia',
-                    hint: 'Ej: Matemáticas, Inglés, General',
+                    'Descripción (Opcional)',
+                    hint: 'Detalles, links, etc.',
                   ),
+                  minLines: 1, 
+                  maxLines: 3, 
+                  maxLength: 500, 
+                  buildCounter: (context, {required currentLength, required isFocused, maxLength}) =>
+                    Text(
+                      '$currentLength/$maxLength',
+                      style: const TextStyle(color: Colors.white54, fontSize: 12),
+                    ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.deny(RegExp(r'[<>]')),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                DropdownButtonFormField<String>(
+                  value: _selectedMateria,
+                  items: kMateriasList.map((String materia) {
+                    return DropdownMenuItem<String>(
+                      value: materia,
+                      child: Text(materia, overflow: TextOverflow.ellipsis),
+                    );
+                  }).toList(),
+                  onChanged: _isSaving ? null : (value) {
+                    setState(() {
+                      _selectedMateria = value; 
+                    });
+                  },
+                  decoration: _getInputDecoration('Materia'),
+                  dropdownColor: Colors.grey[900],
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
+                  isExpanded: true,
+                  icon: const Icon(Icons.arrow_drop_down, color: _primaryGold),
                 ),
                 const SizedBox(height: 30),
+                DropdownButtonFormField<String>(
+                  value: _selectedPriority,
+                  items: ['baja', 'media', 'alta'].map((String value) {
+                    Color itemColor = Colors.white;
+                    if (value == 'alta') itemColor = Colors.redAccent;
+                    if (value == 'media') itemColor = _primaryGold;
+                    if (value == 'baja') itemColor = Colors.greenAccent;
 
-                // Selector de Prioridad con estilo Cyberpunk
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.white38, width: 1),
-                    borderRadius: BorderRadius.circular(10),
-                    color: _darkBackground.withOpacity(0.5),
-                  ),
-                  child: Row(
-                    children: [
-                      const Text(
-                        'Prioridad:',
-                        style: TextStyle(color: _accentCyan, fontSize: 16),
+                    return DropdownMenuItem<String>(
+                      value: value,
+                      child: Text(
+                        value.toUpperCase(),
+                        style: TextStyle(
+                            color: itemColor, fontWeight: FontWeight.bold),
                       ),
-                      const SizedBox(width: 20),
-                      Expanded(
-                        child: DropdownButton<String>(
-                          value: _selectedPriority,
-                          dropdownColor: Colors.grey[900],
-                          style: const TextStyle(
-                              color: Colors.white, fontSize: 16),
-                          underline: Container(),
-                          icon: const Icon(
-                            Icons.arrow_drop_down,
-                            color: _primaryGold,
-                          ),
-                          isExpanded: true,
-                          items: ['baja', 'media', 'alta'].map((String value) {
-                            Color itemColor = Colors.white;
-                            if (value == 'alta') itemColor = Colors.redAccent;
-                            if (value == 'media') itemColor = _primaryGold;
-                            if (value == 'baja') itemColor = Colors.greenAccent;
+                    );
+                  }).toList(),
+                  onChanged: _isSaving ? null : (String? newValue) {
+                    if (newValue != null)
+                      setState(
+                          () => _selectedPriority = newValue);
+                  },
+                  decoration: _getInputDecoration('Prioridad'),
+                  dropdownColor: Colors.grey[900],
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
+                  isExpanded: true,
+                  icon: const Icon(Icons.arrow_drop_down, color: _primaryGold),
+                ),
+                const SizedBox(height: 30),
+                animatedCalendarButton(),
+                const SizedBox(height: 30),
 
-                            return DropdownMenuItem<String>(
-                              value: value,
-                              child: Text(
-                                value.toUpperCase(),
-                                style: TextStyle(
-                                    color: itemColor,
-                                    fontWeight: FontWeight.bold),
-                              ),
-                            );
-                          }).toList(),
-                          onChanged: _isSaving
-                              ? null
-                              : (String? newValue) {
-                                  if (newValue != null)
-                                    setState(
-                                        () => _selectedPriority = newValue);
-                                },
+                // ⬇️ NUEVA SECCIÓN: SUB-TAREAS
+                const Text(
+                  'SUB-TAREAS',
+                  style: TextStyle(color: _accentCyan, fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 10),
+                // --- Lista de sub-tareas existentes ---
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _subtasks.length,
+                  itemBuilder: (context, index) {
+                    final subtask = _subtasks[index];
+                    bool isSubtaskCompleted = subtask['completed'] ?? false;
+                    
+                    return CheckboxListTile(
+                      value: isSubtaskCompleted,
+                      onChanged: (bool? newValue) {
+                        setState(() {
+                          _subtasks[index]['completed'] = newValue ?? false;
+                        });
+                      },
+                      title: Text(
+                        subtask['title'],
+                        style: TextStyle(
+                          color: isSubtaskCompleted ? Colors.white54 : Colors.white,
+                          decoration: isSubtaskCompleted ? TextDecoration.lineThrough : TextDecoration.none,
                         ),
                       ),
-                    ],
-                  ),
+                      controlAffinity: ListTileControlAffinity.leading,
+                      checkColor: Colors.black,
+                      activeColor: _accentCyan,
+                      secondary: IconButton(
+                        icon: const Icon(Icons.remove_circle_outline, color: Colors.redAccent),
+                        onPressed: () async {
+                          // ⬇️ NUEVA ALERTA DE CONFIRMACIÓN
+                          final bool? confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (BuildContext context) {
+                              return AlertDialog(
+                                backgroundColor: Colors.grey[900],
+                                title: const Text('¿Eliminar sub-tarea?', style: TextStyle(color: Colors.white)),
+                                content: Text('Se borrará "${subtask['title']}".', style: const TextStyle(color: Colors.white70)),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.of(context).pop(false),
+                                    child: const Text('Cancelar', style: TextStyle(color: Colors.white70)),
+                                  ),
+                                  TextButton(
+                                    onPressed: () => Navigator.of(context).pop(true),
+                                    child: const Text('Eliminar', style: TextStyle(color: Colors.redAccent)),
+                                  ),
+                                ],
+                              );
+                            },
+                          );
+
+                          if (confirm == true) {
+                            setState(() {
+                              _subtasks.removeAt(index);
+                            });
+                          }
+                          // ⬆️ FIN ALERTA
+                        },
+                      ),
+                    );
+                  },
                 ),
-                const SizedBox(height: 30),
-
-                // Botón de calendario animado
-                animatedCalendarButton(),
-
+                // --- Campo para añadir nueva sub-tarea ---
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _subtaskController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: _getInputDecoration('Añadir nueva sub-tarea', hint: 'Ej: Leer capítulo 1'),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.add_circle, color: _accentCyan, size: 30),
+                      onPressed: _addSubtask,
+                    ),
+                  ],
+                ),
+                // ⬆️ FIN DE SECCIÓN SUB-TAREAS
+                
                 const SizedBox(height: 50),
-
-                // Botón de Guardar animado
                 animatedButton(
-                  text: _isSaving ? 'GUARDANDO...' : 'GUARDAR CAMBIOS',
+                  text: _isSaving ? 'ACTUALIZANDO...' : 'ACTUALIZAR TAREA',
                   onTap: _isSaving ? () {} : _updateTask,
                 ),
               ],

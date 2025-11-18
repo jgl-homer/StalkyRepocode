@@ -4,12 +4,27 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'services/notification_service.dart';
+import 'package:flutter/services.dart'; 
 
 // --- COLORES CYBERPUNK ---
 const Color _primaryGold = Color(0xFFFFD700);
 const Color _accentCyan = Colors.cyanAccent;
 const Color _darkBackground = Colors.black;
 // -------------------------
+
+// ⬇️ 1. Tu lista de materias predeterminada
+final List<String> kMateriasList = [
+  'General',
+  'CONCIENCIA HISTORICA 2. MEXICO DURANTE',
+  'INGLES V',
+  'METODOS DE INVESTIGACION II',
+  'TEMAS SELECTOS DE MATEMATICAS II',
+  'LA ENERGIA EN LOS PROCESOS DE LA VIDA DIARIA',
+  'IMPLEMETA APLICACIONES WEB',
+  'CONSTRUYE BASE DE DATOS',
+  'FORMACION SOCIOEMOCIONAL V',
+  'APLICA A LA ADMINISTRACION',
+];
 
 class AddTaskPage extends StatefulWidget {
   const AddTaskPage({super.key});
@@ -20,15 +35,20 @@ class AddTaskPage extends StatefulWidget {
 
 class _AddTaskPageState extends State<AddTaskPage>
     with SingleTickerProviderStateMixin {
+  
+  // --- Controladores ---
   final TextEditingController _titleController = TextEditingController();
-  final TextEditingController _materiaController =
-      TextEditingController(text: 'General');
+  final TextEditingController _descriptionController = TextEditingController(); 
+  final TextEditingController _subtaskController = TextEditingController(); 
+
+  // --- Estado ---
+  String? _selectedMateria = 'General'; 
   String _selectedPriority = 'media';
   DateTime? _selectedDueDate;
   bool _isSaving = false;
+  List<Map<String, dynamic>> _subtasks = []; 
 
   final NotificationService _notificationService = NotificationService();
-
   late AnimationController _controller;
 
   @override
@@ -43,25 +63,18 @@ class _AddTaskPageState extends State<AddTaskPage>
   void dispose() {
     _controller.dispose();
     _titleController.dispose();
-    _materiaController.dispose();
+    _descriptionController.dispose(); 
+    _subtaskController.dispose(); 
     super.dispose();
   }
 
-  // 🔥 LÓGICA RESTAURADA: Determina el intervalo de repetición automáticamente
   int _determineIntervalMinutes(DateTime dueDate) {
     final totalDuration = dueDate.difference(DateTime.now());
-
     if (totalDuration.isNegative) return 0;
-
-    if (totalDuration.inHours >= 8) {
-      return 240; // 4 horas
-    } else if (totalDuration.inHours >= 4) {
-      return 120; // 2 horas
-    } else if (totalDuration.inHours >= 1) {
-      return 30; // 30 minutos
-    } else {
-      return 15; // 15 minutos
-    }
+    if (totalDuration.inHours >= 8) return 240;
+    else if (totalDuration.inHours >= 4) return 120;
+    else if (totalDuration.inHours >= 1) return 30;
+    else return 15;
   }
 
   Future<void> _selectDateTime(BuildContext context) async {
@@ -84,7 +97,6 @@ class _AddTaskPageState extends State<AddTaskPage>
         );
       },
     );
-
     if (date != null) {
       final TimeOfDay? time = await showTimePicker(
         context: context,
@@ -104,7 +116,6 @@ class _AddTaskPageState extends State<AddTaskPage>
           );
         },
       );
-
       if (time != null) {
         final newDueDate =
             DateTime(date.year, date.month, date.day, time.hour, time.minute);
@@ -119,12 +130,10 @@ class _AddTaskPageState extends State<AddTaskPage>
     }
   }
 
-  // 🔥 MÉTODO _saveTask CON LÓGICA DE NOTIFICACIONES AVANZADA RESTAURADA
   Future<void> _saveTask() async {
     if (_isSaving) return;
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-
     final String title = _titleController.text.trim();
     if (title.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -132,21 +141,22 @@ class _AddTaskPageState extends State<AddTaskPage>
       );
       return;
     }
-
     setState(() => _isSaving = true);
 
-    final String materia = _materiaController.text.trim().isEmpty
-        ? 'General'
-        : _materiaController.text.trim();
+    final String materia = _selectedMateria ?? 'General';
+    final String description = _descriptionController.text.trim();
 
     final newTask = {
       'title': title,
-      'materia': materia,
+      'materia': materia, 
+      'description': description, 
       'priority': _selectedPriority,
       'dueDate': _selectedDueDate != null
           ? Timestamp.fromDate(_selectedDueDate!)
-          : null,
+          : Timestamp.fromDate(DateTime(3000)), 
       'createdAt': Timestamp.now(),
+      'completed': false, 
+      'subtasks': _subtasks, 
     };
 
     try {
@@ -155,18 +165,14 @@ class _AddTaskPageState extends State<AddTaskPage>
           .doc(user.uid)
           .collection('tasks')
           .add(newTask);
-
-      // --- 🔔 LÓGICA CLAVE DE PROGRAMACIÓN MÚLTIPLE DE NOTIFICACIONES RESTAURADA ---
+      
       if (_selectedDueDate != null) {
         final Duration totalDuration =
             _selectedDueDate!.difference(DateTime.now());
         final String taskIdString = docRef.id;
         final int baseNotificationId = taskIdString.hashCode.abs() % 1000000;
-
         if (totalDuration.inMinutes < 15) {
-          // Si faltan menos de 15 minutos, solo se programa la notificación final
           final int notificationId = baseNotificationId + 0;
-
           await _notificationService.scheduleNotification(
             notificationId,
             '🚨 ¡Último Recordatorio!',
@@ -174,35 +180,27 @@ class _AddTaskPageState extends State<AddTaskPage>
             _selectedDueDate!,
           );
         } else {
-          // Si el tiempo es mayor, programamos recordatorios en bucle
           final int intervalInMinutes =
               _determineIntervalMinutes(_selectedDueDate!);
-
           if (intervalInMinutes > 0) {
             DateTime currentTime = DateTime.now();
             final DateTime finalDueDate = _selectedDueDate!;
             int notificationCounter = 0;
-
-            // Bucle que programa notificaciones espaciadas hasta la fecha de vencimiento
             while (currentTime.isBefore(finalDueDate)) {
               final int notificationId =
                   baseNotificationId + notificationCounter;
-
               final Duration remainingTime = finalDueDate.difference(
                 currentTime,
               );
               final String remainingTimeString = remainingTime.inMinutes > 60
                   ? '${remainingTime.inHours} horas'
                   : '${remainingTime.inMinutes} minutos';
-
               await _notificationService.scheduleNotification(
                 notificationId,
                 '🔔 Recordatorio Constante: $title',
                 '¡Faltan $remainingTimeString! (Recordatorio cada $intervalInMinutes min.)',
                 currentTime,
               );
-
-              // Avanzamos al siguiente intervalo
               currentTime = currentTime.add(
                 Duration(minutes: intervalInMinutes),
               );
@@ -211,8 +209,6 @@ class _AddTaskPageState extends State<AddTaskPage>
           }
         }
       }
-      // --- FIN DE LA LÓGICA DE NOTIFICACIONES ---
-
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {
@@ -222,7 +218,16 @@ class _AddTaskPageState extends State<AddTaskPage>
       }
     }
   }
-  // 🔥 FIN DEL MÉTODO _saveTask
+  
+  void _addSubtask() {
+    final String title = _subtaskController.text.trim();
+    if (title.isNotEmpty) {
+      setState(() {
+        _subtasks.add({"title": title, "completed": false});
+        _subtaskController.clear();
+      });
+    }
+  }
 
   InputDecoration _getInputDecoration(String label, {String? hint}) {
     return InputDecoration(
@@ -239,6 +244,10 @@ class _AddTaskPageState extends State<AddTaskPage>
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
         borderSide: const BorderSide(color: _accentCyan, width: 2),
+      ),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Colors.white38, width: 1),
       ),
     );
   }
@@ -286,7 +295,6 @@ class _AddTaskPageState extends State<AddTaskPage>
       if (date == null) return 'Seleccionar Fecha y Hora';
       return DateFormat('dd/MM/yyyy h:mm a').format(date);
     }
-
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
@@ -370,73 +378,152 @@ class _AddTaskPageState extends State<AddTaskPage>
                 ),
                 const SizedBox(height: 20),
                 TextField(
-                  controller: _materiaController,
+                  controller: _descriptionController,
                   style: const TextStyle(color: Colors.white),
                   decoration: _getInputDecoration(
-                    'Materia',
-                    hint: 'Ej: Matemáticas, Inglés, General',
+                    'Descripción (Opcional)',
+                    hint: 'Detalles, links, etc.',
                   ),
+                  minLines: 1, 
+                  maxLines: 3, 
+                  maxLength: 500, 
+                  buildCounter: (context, {required currentLength, required isFocused, maxLength}) =>
+                    Text(
+                      '$currentLength/$maxLength',
+                      style: const TextStyle(color: Colors.white54, fontSize: 12),
+                    ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.deny(RegExp(r'[<>]')),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                DropdownButtonFormField<String>(
+                  value: _selectedMateria,
+                  items: kMateriasList.map((String materia) { 
+                    return DropdownMenuItem<String>(
+                      value: materia,
+                      child: Text(materia, overflow: TextOverflow.ellipsis),
+                    );
+                  }).toList(),
+                  onChanged: _isSaving ? null : (value) {
+                    setState(() {
+                      _selectedMateria = value;
+                    });
+                  },
+                  decoration: _getInputDecoration('Materia'),
+                  dropdownColor: Colors.grey[900],
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
+                  isExpanded: true,
+                  icon: const Icon(Icons.arrow_drop_down, color: _primaryGold),
                 ),
                 const SizedBox(height: 30),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.white38, width: 1),
-                    borderRadius: BorderRadius.circular(10),
-                    color: _darkBackground.withOpacity(0.5),
-                  ),
-                  child: Row(
-                    children: [
-                      const Text(
-                        'Prioridad:',
-                        style: TextStyle(color: _accentCyan, fontSize: 16),
-                      ),
-                      const SizedBox(width: 20),
-                      Expanded(
-                        child: DropdownButton<String>(
-                          value: _selectedPriority,
-                          dropdownColor: Colors.grey[900],
-                          style: const TextStyle(
-                              color: Colors.white, fontSize: 16),
-                          underline: Container(),
-                          icon: const Icon(
-                            Icons.arrow_drop_down,
-                            color: _primaryGold,
-                          ),
-                          isExpanded: true,
-                          items: ['baja', 'media', 'alta'].map((String value) {
-                            Color itemColor = Colors.white;
-                            if (value == 'alta') itemColor = Colors.redAccent;
-                            if (value == 'media') itemColor = _primaryGold;
-                            if (value == 'baja') itemColor = Colors.greenAccent;
+                DropdownButtonFormField<String>(
+                  value: _selectedPriority,
+                  items: ['baja', 'media', 'alta'].map((String value) {
+                    Color itemColor = Colors.white;
+                    if (value == 'alta') itemColor = Colors.redAccent;
+                    if (value == 'media') itemColor = _primaryGold;
+                    if (value == 'baja') itemColor = Colors.greenAccent;
 
-                            return DropdownMenuItem<String>(
-                              value: value,
-                              child: Text(
-                                value.toUpperCase(),
-                                style: TextStyle(
-                                    color: itemColor,
-                                    fontWeight: FontWeight.bold),
-                              ),
-                            );
-                          }).toList(),
-                          onChanged: _isSaving
-                              ? null
-                              : (String? newValue) {
-                                  if (newValue != null) {
-                                    setState(() {
-                                      _selectedPriority = newValue;
-                                    });
-                                  }
-                                },
-                        ),
+                    return DropdownMenuItem<String>(
+                      value: value,
+                      child: Text(
+                        value.toUpperCase(),
+                        style: TextStyle(
+                            color: itemColor, fontWeight: FontWeight.bold),
                       ),
-                    ],
-                  ),
+                    );
+                  }).toList(),
+                  onChanged: _isSaving ? null : (String? newValue) {
+                    if (newValue != null) {
+                      setState(() {
+                        _selectedPriority = newValue;
+                      });
+                    }
+                  },
+                  decoration: _getInputDecoration('Prioridad'),
+                  dropdownColor: Colors.grey[900],
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
+                  isExpanded: true,
+                  icon: const Icon(Icons.arrow_drop_down, color: _primaryGold),
                 ),
                 const SizedBox(height: 30),
                 animatedCalendarButton(),
+                const SizedBox(height: 30),
+
+                const Text(
+                  'SUB-TAREAS (Opcional)',
+                  style: TextStyle(color: _accentCyan, fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _subtaskController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: _getInputDecoration('Nueva sub-tarea', hint: 'Ej: Leer capítulo 1'),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.add_circle, color: _accentCyan, size: 30),
+                      onPressed: _addSubtask,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                
+                // ⬇️ MODIFICADO: Lista de sub-tareas con confirmación de borrado
+                ListView.builder(
+                  shrinkWrap: true, 
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _subtasks.length,
+                  itemBuilder: (context, index) {
+                    final subtask = _subtasks[index];
+                    return ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.arrow_right, color: _primaryGold),
+                      title: Text(
+                        subtask['title'],
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.remove_circle_outline, color: Colors.redAccent),
+                        onPressed: () async {
+                          // ⬇️ NUEVA ALERTA DE CONFIRMACIÓN
+                          final bool? confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (BuildContext context) {
+                              return AlertDialog(
+                                backgroundColor: Colors.grey[900],
+                                title: const Text('¿Eliminar sub-tarea?', style: TextStyle(color: Colors.white)),
+                                content: Text('Se borrará "${subtask['title']}".', style: const TextStyle(color: Colors.white70)),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.of(context).pop(false),
+                                    child: const Text('Cancelar', style: TextStyle(color: Colors.white70)),
+                                  ),
+                                  TextButton(
+                                    onPressed: () => Navigator.of(context).pop(true),
+                                    child: const Text('Eliminar', style: TextStyle(color: Colors.redAccent)),
+                                  ),
+                                ],
+                              );
+                            },
+                          );
+                          
+                          if (confirm == true) {
+                            setState(() {
+                              _subtasks.removeAt(index);
+                            });
+                          }
+                          // ⬆️ FIN ALERTA
+                        },
+                      ),
+                    );
+                  },
+                ),
+                
                 const SizedBox(height: 50),
                 animatedButton(
                   text: _isSaving ? 'GUARDANDO...' : 'GUARDAR TAREA',

@@ -32,6 +32,7 @@ dependencies:
   intl: ^0.20.2 # Necesario para el formato de fecha/hora en dashboard.dart
   flutter_rating_bar: ^4.0.1
   diacritic: ^0.1.6
+  audioplayers: ^6.5.1
 
 dev_dependencies:
   flutter_test:
@@ -45,7 +46,8 @@ flutter:
   # 🖼️ SECCIÓN DE ASSETS: DESCOMENTADA Y CONFIGURADA
   # Esta línea es CLAVE para que Flutter encuentre tu logo en dashboard.dart
   assets:
-    - assets/logo/ 
+    - assets/logo/
+    - assets/sounds/
 
 flutter_icons:
   android: true
