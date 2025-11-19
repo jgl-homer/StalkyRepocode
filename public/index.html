@@ -3,151 +3,105 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Taskify: Login</title>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
-    
+    <title>En Construcción</title>
     <style>
-        /* COLORES: Fondo Negro, Dorado Primario (#FFD700), Cian de Acento (#00FFFF) */
-        :root {
-            --primary-gold: #FFD700;
-            --accent-cyan: #00FFFF;
-            --dark-bg: #111111;
-            --darker-bg: #000000;
-            --text-light: #EEEEEE;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
 
-        body { 
-            font-family: 'Roboto Mono', monospace, Arial, sans-serif; 
-            background-color: var(--darker-bg); 
-            padding: 20px; 
-            color: var(--text-light);
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
         }
-        .container { 
-            max-width: 400px; /* Tamaño optimizado para formularios */
-            margin: 50px auto; 
-            background: var(--dark-bg); 
-            padding: 30px; 
-            border-radius: 8px; 
-            box-shadow: 0 0 15px rgba(0, 255, 255, 0.4); /* Sombra neón cian */
+
+        .container {
+            text-align: center;
+            padding: 20px;
+            max-width: 600px;
         }
-        h1 { 
-            color: var(--primary-gold); 
-            text-align: center; 
-            margin-bottom: 25px; 
-            text-shadow: 0 0 8px var(--primary-gold); 
+
+        .icon {
+            font-size: 80px;
+            margin-bottom: 20px;
+            animation: bounce 2s infinite;
         }
-        input[type="text"], input[type="email"], input[type="password"] { 
-            width: calc(100% - 24px); 
-            padding: 12px; 
-            border: 2px solid var(--accent-cyan); 
-            border-radius: 4px; 
-            font-size: 16px; 
-            background-color: #222; 
-            color: var(--text-light); 
-            margin-top: 15px; 
+
+        h1 {
+            font-size: 3em;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
         }
-        button { 
-            padding: 12px 20px; 
-            background-color: var(--primary-gold); 
-            color: var(--darker-bg); 
-            border: none; 
-            border-radius: 4px; 
-            cursor: pointer; 
-            font-size: 16px; 
-            font-weight: bold;
-            transition: background-color 0.3s, box-shadow 0.3s; 
-            width: 100%; 
-            margin-top: 15px;
+
+        p {
+            font-size: 1.2em;
+            margin-bottom: 30px;
+            opacity: 0.9;
         }
-        button:hover { 
-            background-color: #e6c500; 
-            box-shadow: 0 0 8px var(--primary-gold); 
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(255,255,255,0.3);
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 30px;
         }
-        .error-msg { 
-            color: #FF5733; 
-            text-align: center; 
-            margin-bottom: 15px; 
+
+        .progress {
+            width: 60%;
+            height: 100%;
+            background: white;
+            animation: loading 2s ease-in-out infinite;
         }
-        /* Estilos no usados en Login, pero necesarios para otros archivos */
-        .input-group { display: flex; margin-bottom: 20px; }
-        #lista-tareas { list-style: none; padding: 0; max-width: 600px; margin: 0 auto;}
-        #lista-tareas li { 
-            padding: 12px; 
-            border-left: 5px solid var(--accent-cyan); 
-            border-radius: 4px; 
-            margin-bottom: 8px; 
+
+        @keyframes bounce {
+            0%, 100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-20px);
+            }
         }
-        .delete-btn { background-color: #C70039; }
-        .logout-btn { background-color: var(--accent-cyan); }
+
+        @keyframes loading {
+            0% {
+                width: 0%;
+            }
+            50% {
+                width: 70%;
+            }
+            100% {
+                width: 100%;
+            }
+        }
+
+        .contact {
+            margin-top: 40px;
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
     </style>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
 </head>
 <body>
     <div class="container">
-        <h1>LOGIN // ACCESO AL SISTEMA</h1>
-        <div id="error-message" class="error-msg"></div>
+        <div class="icon">🚧</div>
+        <h1>En Construcción</h1>
+        <p>Estamos trabajando para traerte algo increíble. ¡Vuelve pronto!</p>
         
-        <input type="email" id="email" placeholder="[ CORREO ELECTRÓNICO ]">
-        <input type="password" id="password" placeholder="[ CONTRASEÑA ]">
+        <div class="progress-bar">
+            <div class="progress"></div>
+        </div>
         
-        <button onclick="iniciarSesion()" style="margin-top: 25px;">INICIAR SESIÓN</button>
-        <button onclick="window.location.href='register.html';" style="background-color: var(--accent-cyan); color: var(--darker-bg);">CREAR CUENTA</button>
+        <div class="contact">
+            <p>Para más información, contáctanos</p>
+        </div>
     </div>
-
-    <script>
-        // TUS CREDENCIALES COMPLETAS
-        const firebaseConfig = {
-            apiKey: "AIzaSyCf9kfwpoXH5yqnr643vm4gQxXK3Sexb_Q",
-            authDomain: "to-do-taskingcheck.firebaseapp.com",
-            projectId: "to-do-taskingcheck",
-            storageBucket: "to-do-taskingcheck.firebasestorage.app",
-            messagingSenderId: "540678482428",
-            appId: "1:540678482428:web:824c1ff93834dba0f56a79",
-            databaseURL: "https://to-do-taskingcheck-default-rtdb.firebaseio.com"
-        };
-        
-        let auth; // Declaramos auth globalmente para usarlo en la función iniciarSesion
-        
-        // CORRECCIÓN: Inicializamos Firebase solo cuando el DOM está completamente cargado
-        document.addEventListener('DOMContentLoaded', function() {
-            try {
-                const app = firebase.initializeApp(firebaseConfig);
-                auth = app.auth(); 
-                
-                // Redirigir si el usuario ya está logueado
-                auth.onAuthStateChanged(user => {
-                    if (user) {
-                        window.location.href = 'dashboard.html';
-                    }
-                });
-
-            } catch (error) {
-                console.error("Error al inicializar Firebase:", error);
-                mostrarError("Error interno: No se pudo conectar a Firebase.");
-            }
-        });
-
-        function mostrarError(mensaje) {
-            document.getElementById('error-message').textContent = mensaje;
-        }
-
-        async function iniciarSesion() {
-            if (!auth) {
-                mostrarError("El sistema no está listo. Intenta recargar.");
-                return;
-            }
-
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-            mostrarError(''); 
-
-            try {
-                await auth.signInWithEmailAndPassword(email, password);
-            } catch (error) {
-                mostrarError('Error de Login: ' + error.message);
-            }
-        }
-    </script>
 </body>
 </html>
