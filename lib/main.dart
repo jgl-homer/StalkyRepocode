@@ -8,6 +8,8 @@ import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart'
     as tz_package; // Importación para tz.local
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:device_preview/device_preview.dart';
 
 import 'firebase_options.dart';
 import 'login.dart';
@@ -65,7 +67,12 @@ Future<void> main() async {
     }
   });
 
-  runApp(const MyApp());
+  runApp(
+    DevicePreview(
+      enabled: true,
+      builder: (context) => const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -74,15 +81,42 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Taskify',
+      title: 'STAKLY',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark(),
+      locale: DevicePreview.locale(context),
+      builder: DevicePreview.appBuilder,
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: Colors.black,
+        primaryColor: const Color(0xFFD4AF37),
+        colorScheme: const ColorScheme.dark(
+          primary: Color(0xFFD4AF37),
+          background: Color(0xFF000000),
+        ),
+        textTheme: GoogleFonts.interTextTheme(
+          ThemeData.dark().textTheme,
+        ).apply(
+          bodyColor: Colors.white,
+          displayColor: Colors.white,
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF000000),
+          elevation: 0,
+          centerTitle: true,
+        ),
+        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+          backgroundColor: Color(0xFF000000),
+          selectedItemColor: Color(0xFFD4AF37),
+          unselectedItemColor: Colors.grey,
+          type: BottomNavigationBarType.fixed,
+        ),
+      ),
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
+              body: Center(child: CircularProgressIndicator(color: Color(0xFFD4AF37))),
             );
           }
 

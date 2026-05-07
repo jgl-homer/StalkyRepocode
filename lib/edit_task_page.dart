@@ -1,30 +1,9 @@
-// 📁 lib/edit_task_page.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter/services.dart';
 import 'services/notification_service.dart';
-import 'package:flutter/services.dart'; 
-
-// --- COLORES CYBERPUNK ---
-const Color _primaryGold = Color(0xFFFFD700);
-const Color _accentCyan = Colors.cyanAccent;
-const Color _darkBackground = Colors.black;
-// -------------------------
-
-// --- Lista de Materias ---
-final List<String> kMateriasList = [
-  'General',
-  'CONCIENCIA HISTORICA 2. MEXICO DURANTE',
-  'INGLES V',
-  'METODOS DE INVESTIGACION II',
-  'TEMAS SELECTOS DE MATEMATICAS II',
-  'LA ENERGIA EN LOS PROCESOS DE LA VIDA DIARIA',
-  'IMPLEMETA APLICACIONES WEB',
-  'CONSTRUYE BASE DE DATOS',
-  'FORMACION SOCIOEMOCIONAL V',
-  'APLICA A LA ADMINISTRACION',
-];
 
 class EditTaskPage extends StatefulWidget {
   final String taskId;
@@ -40,56 +19,39 @@ class EditTaskPage extends StatefulWidget {
   State<EditTaskPage> createState() => _EditTaskPageState();
 }
 
-class _EditTaskPageState extends State<EditTaskPage>
-    with SingleTickerProviderStateMixin {
-  
-  // --- Controladores ---
+class _EditTaskPageState extends State<EditTaskPage> {
+  final Color _bg = const Color(0xFF000000);
+  final Color _gold = const Color(0xFFD4AF37);
+  final Color _cardBg = const Color(0xFF1E1E1E);
+
   late TextEditingController _titleController;
-  late TextEditingController _descriptionController; 
+  late TextEditingController _descriptionController;
   final TextEditingController _subtaskController = TextEditingController();
 
-  // --- Estado ---
-  String? _selectedMateria; 
-  late String _selectedPriority;
-  late DateTime? _selectedDueDate;
+  String _selectedCategory = 'General';
+  final List<String> _categories = ['Escuela', 'Trabajo', 'Pagos', 'Personal', 'General'];
+  String _selectedPriority = 'media';
+  DateTime? _selectedDueDate;
   bool _isSaving = false;
-  List<Map<String, dynamic>> _subtasks = []; 
+  List<Map<String, dynamic>> _subtasks = [];
 
   final NotificationService _notificationService = NotificationService();
-  late AnimationController _controller;
 
   @override
   void initState() {
     super.initState();
-    _controller =
-        AnimationController(vsync: this, duration: const Duration(seconds: 6))
-          ..repeat();
+    _titleController = TextEditingController(text: widget.initialData['title'] ?? '');
+    _descriptionController = TextEditingController(text: widget.initialData['description'] ?? '');
 
-    _titleController = TextEditingController(
-      text: widget.initialData['title'] ?? '',
-    );
-    _descriptionController = TextEditingController( 
-      text: widget.initialData['description'] ?? '',
-    );
-    _selectedMateria = widget.initialData['materia'] ?? 'General';
-    if (!kMateriasList.contains(_selectedMateria)) {
-      _selectedMateria = 'General';
-    }
+    final String rawMateria = widget.initialData['materia'] ?? 'General';
+    _selectedCategory = _categories.contains(rawMateria) ? rawMateria : 'General';
     _selectedPriority = widget.initialData['priority'] ?? 'media';
 
-    if (widget.initialData['dueDate'] != null &&
-        widget.initialData['dueDate'] is Timestamp) {
-      DateTime potentialDate = (widget.initialData['dueDate'] as Timestamp).toDate();
-      if (potentialDate.year != 3000) {
-        _selectedDueDate = potentialDate;
-      } else {
-        _selectedDueDate = null; 
-      }
-    } else {
-      _selectedDueDate = null;
+    if (widget.initialData['dueDate'] != null && widget.initialData['dueDate'] is Timestamp) {
+      final potentialDate = (widget.initialData['dueDate'] as Timestamp).toDate();
+      if (potentialDate.year != 3000) _selectedDueDate = potentialDate;
     }
 
-    // Cargar sub-tareas existentes
     if (widget.initialData['subtasks'] != null) {
       _subtasks = List<Map<String, dynamic>>.from(widget.initialData['subtasks']);
     }
@@ -97,83 +59,54 @@ class _EditTaskPageState extends State<EditTaskPage>
 
   @override
   void dispose() {
-    _controller.dispose();
     _titleController.dispose();
-    _descriptionController.dispose(); 
-    _subtaskController.dispose(); 
+    _descriptionController.dispose();
+    _subtaskController.dispose();
     super.dispose();
   }
 
-  int _determineIntervalMinutes(DateTime dueDate) {
-    final totalDuration = dueDate.difference(DateTime.now());
-    if (totalDuration.isNegative) return 0;
-    if (totalDuration.inHours >= 8) return 240;
-    else if (totalDuration.inHours >= 4) return 120;
-    else if (totalDuration.inHours >= 1) return 30;
-    else return 15;
-  }
-  Future<void> _selectDateTime(BuildContext context) async {
-    final DateTime now = DateTime.now();
-    final DateTime todayStart = DateTime(now.year, now.month, now.day);
+  Future<void> _selectDate() async {
+    final now = DateTime.now();
     final DateTime? date = await showDatePicker(
       context: context,
       initialDate: _selectedDueDate ?? now,
-      firstDate: todayStart,
-      lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
-      builder: (context, child) {
-        return Theme(
-          data: ThemeData.dark().copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: _accentCyan, 
-              onSurface: Colors.white,
-            ),
-            dialogBackgroundColor: _darkBackground, 
-          ),
-          child: child!,
-        );
-      },
+      firstDate: DateTime(now.year, now.month, now.day),
+      lastDate: now.add(const Duration(days: 365 * 5)),
+      builder: (context, child) => Theme(
+        data: ThemeData.dark().copyWith(
+          colorScheme: ColorScheme.dark(primary: _gold, onSurface: Colors.white, surface: _cardBg),
+          dialogTheme: DialogThemeData(backgroundColor: _bg),
+        ),
+        child: child!,
+      ),
     );
-    if (date != null) {
-      TimeOfDay initialTime = _selectedDueDate != null
+    if (date != null && mounted) {
+      final TimeOfDay initial = _selectedDueDate != null
           ? TimeOfDay.fromDateTime(_selectedDueDate!)
           : TimeOfDay.now();
       final TimeOfDay? time = await showTimePicker(
         context: context,
-        initialTime: initialTime,
-        builder: (context, child) {
-          return Theme(
-            data: ThemeData.dark().copyWith(
-              colorScheme: const ColorScheme.dark(
-                primary: _accentCyan, 
-                onSurface: Colors.white,
-              ),
-              dialogBackgroundColor: _darkBackground, 
-            ),
-            child: child!,
-          );
-        },
+        initialTime: initial,
+        builder: (context, child) => Theme(
+          data: ThemeData.dark().copyWith(
+            colorScheme: ColorScheme.dark(primary: _gold, onSurface: Colors.white, surface: _cardBg),
+            dialogTheme: DialogThemeData(backgroundColor: _bg),
+          ),
+          child: child!,
+        ),
       );
       if (time != null) {
-        final DateTime newDueDate = DateTime(
-          date.year,
-          date.month,
-          date.day,
-          time.hour,
-          time.minute,
-        );
-        if (newDueDate.isBefore(now)) {
+        final combined = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+        if (combined.isBefore(DateTime.now())) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                  content: Text(
-                      'La fecha y hora de vencimiento no puede ser en el pasado.')),
-            );
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: const Text('La fecha no puede ser en el pasado', style: TextStyle(color: Colors.black)),
+              backgroundColor: _gold,
+            ));
           }
           return;
         }
-        setState(() {
-          _selectedDueDate = newDueDate;
-        });
+        setState(() => _selectedDueDate = combined);
       }
     }
   }
@@ -182,425 +115,306 @@ class _EditTaskPageState extends State<EditTaskPage>
     if (_isSaving) return;
     final String title = _titleController.text.trim();
     if (title.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('El título de la tarea no puede estar vacío.')),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Text('El título no puede estar vacío', style: TextStyle(color: Colors.black)),
+        backgroundColor: _gold,
+      ));
       return;
     }
-    setState(() { _isSaving = true; });
+    setState(() => _isSaving = true);
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      if (mounted) { setState(() { _isSaving = false; }); }
-      return;
-    }
-
-    final String materia = _selectedMateria ?? 'General';
-    final String description = _descriptionController.text.trim();
+    if (user == null) { setState(() => _isSaving = false); return; }
 
     final dataToUpdate = {
       'title': title,
-      'materia': materia, 
-      'description': description, 
+      'materia': _selectedCategory,
+      'description': _descriptionController.text.trim(),
       'priority': _selectedPriority,
       'dueDate': _selectedDueDate != null
           ? Timestamp.fromDate(_selectedDueDate!)
-          : Timestamp.fromDate(DateTime(3000)), 
-      'subtasks': _subtasks, 
+          : Timestamp.fromDate(DateTime(3000)),
+      'subtasks': _subtasks,
     };
 
-    final int baseNotificationId = widget.taskId.hashCode.abs() % 1000000;
-
+    final int baseId = widget.taskId.hashCode.abs() % 1000000;
     try {
-      for (int i = 0; i < 50; i++) { 
-        await _notificationService.cancelNotification(baseNotificationId + i);
+      for (int i = 0; i < 50; i++) {
+        await _notificationService.cancelNotification(baseId + i);
       }
       await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('tasks')
-          .doc(widget.taskId)
+          .collection('users').doc(user.uid).collection('tasks').doc(widget.taskId)
           .update(dataToUpdate);
-      if (_selectedDueDate != null) {
-        final Duration totalDuration =
-            _selectedDueDate!.difference(DateTime.now());
-        if (totalDuration.inMinutes < 15) {
-          if (totalDuration.inSeconds > 0) { 
-            await _notificationService.scheduleNotification(
-              baseNotificationId + 0,
-              '🚨 ¡Último Recordatorio (Editado)!',
-              'Tu tarea "$title" vence AHORA.',
-              _selectedDueDate!,
-            );
-          }
-        } else {
-          final int intervalInMinutes =
-              _determineIntervalMinutes(_selectedDueDate!);
-          if (intervalInMinutes > 0) {
-            DateTime currentTime = DateTime.now();
-            final DateTime finalDueDate = _selectedDueDate!;
-            int notificationCounter = 0;
-            while (currentTime.isBefore(finalDueDate) && notificationCounter < 50) { 
-              final int notificationId =
-                  baseNotificationId + notificationCounter;
-              final Duration remainingTime =
-                  finalDueDate.difference(currentTime);
-              final String remainingTimeString = remainingTime.inMinutes > 60
-                  ? '${remainingTime.inHours} horas'
-                  : '${remainingTime.inMinutes} minutos';
-              await _notificationService.scheduleNotification(
-                notificationId,
-                '🔄 Recordatorio Constante (Editado): $title',
-                '¡Faltan $remainingTimeString! (Recordatorio cada $intervalInMinutes min.)',
-                currentTime,
-              );
-              currentTime = currentTime.add(
-                Duration(minutes: intervalInMinutes),
-              );
-              notificationCounter++;
-            }
-          }
-        }
+      if (_selectedDueDate != null && _selectedDueDate!.isAfter(DateTime.now())) {
+        await _notificationService.scheduleNotification(
+          baseId, 'Recordatorio: $title', '¡Es hora de completar tu tarea!', _selectedDueDate!);
       }
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error al actualizar: $e')));
-        setState(() {
-          _isSaving = false;
-        });
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+        setState(() => _isSaving = false);
       }
     }
   }
 
   void _addSubtask() {
-    final String title = _subtaskController.text.trim();
-    if (title.isNotEmpty) {
-      setState(() {
-        _subtasks.add({"title": title, "completed": false});
-        _subtaskController.clear();
-      });
+    final String t = _subtaskController.text.trim();
+    if (t.isNotEmpty) {
+      setState(() { _subtasks.add({'title': t, 'completed': false}); _subtaskController.clear(); });
     }
   }
 
-  InputDecoration _getInputDecoration(String label, {String? hint}) {
-    return InputDecoration(
-      labelText: label,
-      hintText: hint,
-      labelStyle: const TextStyle(color: _accentCyan),
-      hintStyle: const TextStyle(color: Colors.white30),
-      contentPadding:
-          const EdgeInsets.symmetric(vertical: 15.0, horizontal: 10.0),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: Colors.white38, width: 1),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: _accentCyan, width: 2),
-      ),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: Colors.white38, width: 1),
-      ),
-    );
+  Color _priorityColor(String p) {
+    if (p == 'alta') return Colors.redAccent;
+    if (p == 'baja') return Colors.greenAccent;
+    return _gold;
   }
-  Widget animatedButton({required String text, required VoidCallback onTap}) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        final color1 = Color.lerp(const Color(0xFFFFD700),
-            const Color(0xFFB300FF), _controller.value)!;
-        final color2 = Color.lerp(const Color(0xFFB300FF),
-            const Color(0xFFFFD700), _controller.value)!;
-        return InkWell(
-          borderRadius: BorderRadius.circular(30),
-          onTap: _isSaving ? null : onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 500),
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [color1, color2],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(30),
-              border: Border.all(color: _accentCyan, width: 2),
-            ),
-            child: Text(
-              text,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-  Widget animatedCalendarButton() {
-    String formatDate(DateTime? date) {
-      if (date == null) return 'Seleccionar Fecha y Hora';
-      return DateFormat('dd/MM/yyyy h:mm a').format(date);
-    }
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        final color1 = Color.lerp(const Color(0xFF9C27B0),
-            const Color(0xFFB300FF), _controller.value)!;
-        final color2 = Color.lerp(const Color(0xFFB300FF),
-            const Color(0xFF9C27B0), _controller.value)!;
-        return InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: _isSaving ? null : () => _selectDateTime(context),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 500),
-            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [color1, color2],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: _accentCyan, width: 2),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  formatDate(_selectedDueDate),
-                  style: TextStyle(
-                    color: _selectedDueDate == null
-                        ? Colors.white70
-                        : Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const Icon(Icons.calendar_today, color: Colors.white),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
+
+  InputDecoration _inputDeco(String label, {String? hint}) => InputDecoration(
+    labelText: label.isEmpty ? null : label,
+    hintText: hint,
+    labelStyle: const TextStyle(color: Colors.white70),
+    hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.3)),
+    filled: true,
+    fillColor: _cardBg,
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: _gold, width: 2)),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+  );
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _darkBackground, 
+      backgroundColor: _bg,
       appBar: AppBar(
-        title: const Text(
-          'Editar Tarea',
-          style: TextStyle(
-              color: _accentCyan, fontWeight: FontWeight.bold), 
-        ),
-        backgroundColor: _darkBackground, 
-        iconTheme: const IconThemeData(color: _accentCyan), 
+        title: const Text('Editar Tarea', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        backgroundColor: _bg,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16.0),
+            child: Image.asset(
+              'assets/logo/icon.png',
+              height: 40,
+              width: 40,
+              errorBuilder: (_, __, ___) => Icon(Icons.star, color: _gold),
+            ),
+          ),
+        ],
       ),
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: IgnorePointer(
-              child: Opacity(
-                opacity: 0.08,
-                child: Center(
-                  child: Image.asset(
-                    'assets/logo/icon.png', 
-                    fit: BoxFit.contain,
-                    width: MediaQuery.of(context).size.width * 0.7,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Title
+            TextField(
+              controller: _titleController,
+              style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+              inputFormatters: [FilteringTextInputFormatter.deny(RegExp(r'[<>]'))],
+              decoration: InputDecoration(
+                hintText: '¿Qué necesitas hacer?',
+                hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.3), fontSize: 22, fontWeight: FontWeight.bold),
+                border: InputBorder.none,
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Category chips
+            const Text('Categoría', style: TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 10),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: _categories.map((cat) {
+                  final isSelected = _selectedCategory == cat;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 10),
+                    child: ChoiceChip(
+                      label: Text(cat),
+                      selected: isSelected,
+                      onSelected: (sel) { if (sel) setState(() => _selectedCategory = cat); },
+                      backgroundColor: _cardBg,
+                      selectedColor: _gold,
+                      labelStyle: TextStyle(color: isSelected ? Colors.black : Colors.white, fontWeight: FontWeight.bold),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      side: BorderSide.none,
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Priority
+            const Text('Prioridad', style: TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 10),
+            Row(
+              children: ['baja', 'media', 'alta'].map((p) {
+                final isSelected = _selectedPriority == p;
+                final col = _priorityColor(p);
+                return Padding(
+                  padding: const EdgeInsets.only(right: 10),
+                  child: GestureDetector(
+                    onTap: () => setState(() => _selectedPriority = p),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: isSelected ? col.withValues(alpha: 0.15) : _cardBg,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: isSelected ? col : Colors.transparent, width: 2),
+                      ),
+                      child: Text(
+                        p.toUpperCase(),
+                        style: TextStyle(color: isSelected ? col : Colors.white54, fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                    ),
                   ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 24),
+
+            // Date/Time
+            const Text('Fecha y Hora', style: TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 10),
+            GestureDetector(
+              onTap: _selectDate,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: _cardBg,
+                  borderRadius: BorderRadius.circular(16),
+                  border: _selectedDueDate != null ? Border.all(color: _gold.withValues(alpha: 0.5), width: 1.5) : null,
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.calendar_today_outlined, color: _gold, size: 20),
+                    const SizedBox(width: 12),
+                    Text(
+                      _selectedDueDate != null
+                          ? DateFormat('dd/MM/yyyy  h:mm a').format(_selectedDueDate!)
+                          : 'Seleccionar fecha y hora',
+                      style: TextStyle(color: _selectedDueDate != null ? Colors.white : Colors.white54, fontWeight: FontWeight.w600),
+                    ),
+                    const Spacer(),
+                    if (_selectedDueDate != null)
+                      GestureDetector(
+                        onTap: () => setState(() => _selectedDueDate = null),
+                        child: const Icon(Icons.close, color: Colors.white38, size: 18),
+                      ),
+                  ],
                 ),
               ),
             ),
-          ),
-          SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                TextField(
-                  controller: _titleController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: _getInputDecoration('Título de la tarea'),
-                ),
-                const SizedBox(height: 20),
-                TextField(
-                  controller: _descriptionController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: _getInputDecoration(
-                    'Descripción (Opcional)',
-                    hint: 'Detalles, links, etc.',
-                  ),
-                  minLines: 1, 
-                  maxLines: 3, 
-                  maxLength: 500, 
-                  buildCounter: (context, {required currentLength, required isFocused, maxLength}) =>
-                    Text(
-                      '$currentLength/$maxLength',
-                      style: const TextStyle(color: Colors.white54, fontSize: 12),
-                    ),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.deny(RegExp(r'[<>]')),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                DropdownButtonFormField<String>(
-                  value: _selectedMateria,
-                  items: kMateriasList.map((String materia) {
-                    return DropdownMenuItem<String>(
-                      value: materia,
-                      child: Text(materia, overflow: TextOverflow.ellipsis),
-                    );
-                  }).toList(),
-                  onChanged: _isSaving ? null : (value) {
-                    setState(() {
-                      _selectedMateria = value; 
-                    });
-                  },
-                  decoration: _getInputDecoration('Materia'),
-                  dropdownColor: Colors.grey[900],
-                  style: const TextStyle(color: Colors.white, fontSize: 16),
-                  isExpanded: true,
-                  icon: const Icon(Icons.arrow_drop_down, color: _primaryGold),
-                ),
-                const SizedBox(height: 30),
-                DropdownButtonFormField<String>(
-                  value: _selectedPriority,
-                  items: ['baja', 'media', 'alta'].map((String value) {
-                    Color itemColor = Colors.white;
-                    if (value == 'alta') itemColor = Colors.redAccent;
-                    if (value == 'media') itemColor = _primaryGold;
-                    if (value == 'baja') itemColor = Colors.greenAccent;
+            const SizedBox(height: 24),
 
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(
-                        value.toUpperCase(),
-                        style: TextStyle(
-                            color: itemColor, fontWeight: FontWeight.bold),
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: _isSaving ? null : (String? newValue) {
-                    if (newValue != null)
-                      setState(
-                          () => _selectedPriority = newValue);
-                  },
-                  decoration: _getInputDecoration('Prioridad'),
-                  dropdownColor: Colors.grey[900],
-                  style: const TextStyle(color: Colors.white, fontSize: 16),
-                  isExpanded: true,
-                  icon: const Icon(Icons.arrow_drop_down, color: _primaryGold),
-                ),
-                const SizedBox(height: 30),
-                animatedCalendarButton(),
-                const SizedBox(height: 30),
+            // Description
+            const Text('Nota adicional (Opcional)', style: TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _descriptionController,
+              style: const TextStyle(color: Colors.white),
+              maxLines: 3,
+              maxLength: 500,
+              inputFormatters: [FilteringTextInputFormatter.deny(RegExp(r'[<>]'))],
+              buildCounter: (context, {required currentLength, required isFocused, maxLength}) =>
+                  Text('$currentLength/$maxLength', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+              decoration: _inputDeco('', hint: 'Detalles...'),
+            ),
+            const SizedBox(height: 24),
 
-                // ⬇️ NUEVA SECCIÓN: SUB-TAREAS
-                const Text(
-                  'SUB-TAREAS',
-                  style: TextStyle(color: _accentCyan, fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 10),
-                // --- Lista de sub-tareas existentes ---
-                ListView.builder(
+            // Subtasks
+            const Text('Sub-tareas', style: TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 10),
+            if (_subtasks.isNotEmpty)
+              Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                decoration: BoxDecoration(color: _cardBg, borderRadius: BorderRadius.circular(16)),
+                child: ListView.separated(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: _subtasks.length,
+                  separatorBuilder: (_, __) => const Divider(color: Colors.white12, height: 1),
                   itemBuilder: (context, index) {
-                    final subtask = _subtasks[index];
-                    bool isSubtaskCompleted = subtask['completed'] ?? false;
-                    
-                    return CheckboxListTile(
-                      value: isSubtaskCompleted,
-                      onChanged: (bool? newValue) {
-                        setState(() {
-                          _subtasks[index]['completed'] = newValue ?? false;
-                        });
-                      },
-                      title: Text(
-                        subtask['title'],
-                        style: TextStyle(
-                          color: isSubtaskCompleted ? Colors.white54 : Colors.white,
-                          decoration: isSubtaskCompleted ? TextDecoration.lineThrough : TextDecoration.none,
+                    final sub = _subtasks[index];
+                    final done = sub['completed'] ?? false;
+                    return ListTile(
+                      leading: GestureDetector(
+                        onTap: () => setState(() => _subtasks[index]['completed'] = !done),
+                        child: Container(
+                          width: 22, height: 22,
+                          decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: _gold, width: 2), color: done ? _gold : Colors.transparent),
+                          child: done ? const Icon(Icons.check, size: 14, color: Colors.black) : null,
                         ),
                       ),
-                      controlAffinity: ListTileControlAffinity.leading,
-                      checkColor: Colors.black,
-                      activeColor: _accentCyan,
-                      secondary: IconButton(
-                        icon: const Icon(Icons.remove_circle_outline, color: Colors.redAccent),
+                      title: Text(sub['title'], style: TextStyle(color: done ? Colors.white38 : Colors.white, decoration: done ? TextDecoration.lineThrough : null)),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.remove_circle_outline, color: Colors.redAccent, size: 20),
                         onPressed: () async {
-                          // ⬇️ NUEVA ALERTA DE CONFIRMACIÓN
-                          final bool? confirm = await showDialog<bool>(
+                          final confirm = await showDialog<bool>(
                             context: context,
-                            builder: (BuildContext context) {
-                              return AlertDialog(
-                                backgroundColor: Colors.grey[900],
-                                title: const Text('¿Eliminar sub-tarea?', style: TextStyle(color: Colors.white)),
-                                content: Text('Se borrará "${subtask['title']}".', style: const TextStyle(color: Colors.white70)),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.of(context).pop(false),
-                                    child: const Text('Cancelar', style: TextStyle(color: Colors.white70)),
-                                  ),
-                                  TextButton(
-                                    onPressed: () => Navigator.of(context).pop(true),
-                                    child: const Text('Eliminar', style: TextStyle(color: Colors.redAccent)),
-                                  ),
-                                ],
-                              );
-                            },
+                            builder: (_) => AlertDialog(
+                              backgroundColor: _cardBg,
+                              title: const Text('¿Eliminar sub-tarea?', style: TextStyle(color: Colors.white)),
+                              content: Text('Se borrará "${sub['title']}".', style: const TextStyle(color: Colors.white70)),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar', style: TextStyle(color: Colors.white54))),
+                                TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Eliminar', style: TextStyle(color: Colors.redAccent))),
+                              ],
+                            ),
                           );
-
-                          if (confirm == true) {
-                            setState(() {
-                              _subtasks.removeAt(index);
-                            });
-                          }
-                          // ⬆️ FIN ALERTA
+                          if (confirm == true) setState(() => _subtasks.removeAt(index));
                         },
                       ),
                     );
                   },
                 ),
-                // --- Campo para añadir nueva sub-tarea ---
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _subtaskController,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: _getInputDecoration('Añadir nueva sub-tarea', hint: 'Ej: Leer capítulo 1'),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.add_circle, color: _accentCyan, size: 30),
-                      onPressed: _addSubtask,
-                    ),
-                  ],
+              ),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _subtaskController,
+                    style: const TextStyle(color: Colors.white),
+                    onSubmitted: (_) => _addSubtask(),
+                    decoration: _inputDeco('', hint: 'Añadir sub-tarea...'),
+                  ),
                 ),
-                // ⬆️ FIN DE SECCIÓN SUB-TAREAS
-                
-                const SizedBox(height: 50),
-                animatedButton(
-                  text: _isSaving ? 'ACTUALIZANDO...' : 'ACTUALIZAR TAREA',
-                  onTap: _isSaving ? () {} : _updateTask,
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: _addSubtask,
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(color: _gold, borderRadius: BorderRadius.circular(16)),
+                    child: const Icon(Icons.add, color: Colors.black, size: 22),
+                  ),
                 ),
               ],
             ),
-          ),
-        ],
+            const SizedBox(height: 40),
+
+            // Save button
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: ElevatedButton(
+                onPressed: _isSaving ? null : _updateTask,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _gold,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  elevation: 0,
+                ),
+                child: _isSaving
+                    ? const CircularProgressIndicator(color: Colors.black)
+                    : const Text('Actualizar Tarea', style: TextStyle(color: Colors.black, fontSize: 18, fontWeight: FontWeight.bold)),
+              ),
+            ),
+            const SizedBox(height: 30),
+          ],
+        ),
       ),
     );
   }

@@ -131,6 +131,17 @@ class _PomodoroPageState extends State<PomodoroPage> with TickerProviderStateMix
             }
           },
         ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16.0),
+            child: Image.asset(
+              'assets/logo/icon.png',
+              height: 40,
+              width: 40,
+              errorBuilder: (_, __, ___) => const Icon(Icons.star, color: _primaryGold),
+            ),
+          ),
+        ],
       ),
       body: Center(
         child: Column(

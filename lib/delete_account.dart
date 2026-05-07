@@ -3,12 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'login.dart';
 
-// --- COLORES CYBERPUNK ---
-const Color _primaryGold = Color(0xFFFFD700); // Dorado
-const Color _accentCyan = Colors.cyanAccent; // Cian
-const Color _darkBackground = Colors.black; // Negro oscuro de fondo
-// -------------------------
-
 class DeleteAccountPage extends StatefulWidget {
   const DeleteAccountPage({super.key});
 
@@ -22,36 +16,7 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
   String? _error;
   bool _loading = false;
 
-  // --- WIDGET PARA DECORACIÓN DE INPUT CYBERPUNK (Adaptado) ---
-  InputDecoration _getInputDecoration(String label) {
-    return InputDecoration(
-      labelText: label,
-      labelStyle: const TextStyle(color: _accentCyan),
-      hintStyle: const TextStyle(color: Colors.white30),
-      contentPadding:
-          const EdgeInsets.symmetric(vertical: 15.0, horizontal: 10.0),
-      filled: true,
-      fillColor: Colors.grey.withOpacity(0.1), // Fondo ligeramente visible
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: Colors.white38, width: 1),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: _accentCyan, width: 2),
-      ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: Colors.redAccent, width: 2),
-      ),
-      focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: Colors.red, width: 3),
-      ),
-    );
-  }
-
-  // --- LÓGICA DE ELIMINACIÓN (SIN CAMBIOS) ---
+  // --- LÓGICA DE ELIMINACIÓN ---
   Future<void> _deleteAccount() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -95,7 +60,6 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
         );
       }
     } on FirebaseAuthException catch (e) {
-      // Mapeo simple de errores, o mantienes el mensaje completo de Firebase
       String message = 'Error al eliminar cuenta';
       if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
         message = 'Contraseña incorrecta. Por favor, inténtalo de nuevo.';
@@ -108,124 +72,332 @@ class _DeleteAccountPageState extends State<DeleteAccountPage> {
 
       setState(() => _error = message);
     } finally {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
-  // ---------------------------------------------
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _darkBackground, // Fondo totalmente negro
-      appBar: AppBar(
-        title: const Text(
-          'Eliminar Cuenta',
-          style: TextStyle(color: _primaryGold, fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: _darkBackground,
-        iconTheme: const IconThemeData(color: _accentCyan),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Icon(Icons.warning_amber_rounded,
-                color: Colors.redAccent, size: 80),
-            const SizedBox(height: 20),
-            const Text(
-              'ELIMINACIÓN DE DATOS (Protocolo R3D)',
-              style: TextStyle(
-                color: Colors.redAccent,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          /// EFECTO ROJO DE FONDO (Glows)
+          Positioned(
+            top: -150,
+            left: -100,
+            child: Container(
+              width: 350,
+              height: 350,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.red.withOpacity(0.18),
               ),
-              textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 10),
-            const Text(
-              '⚠️ ADVERTENCIA: Esta acción es permanente. Se eliminará tu cuenta de usuario y todos los datos (tareas) asociados a ella en Firestore. Debes reingresar tu contraseña.',
-              style: TextStyle(color: Colors.white70, fontSize: 16),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 40),
-
-            // --- Mensaje de Error (Estilizado) ---
-            if (_error != null)
-              Container(
-                padding: const EdgeInsets.all(12),
-                margin: const EdgeInsets.only(bottom: 20),
-                decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.2),
-                  border: Border.all(color: Colors.redAccent),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  _error!,
-                  style: const TextStyle(
-                      color: Colors.redAccent, fontWeight: FontWeight.bold),
-                  textAlign: TextAlign.center,
-                ),
+          ),
+          Positioned(
+            bottom: -180,
+            right: -120,
+            child: Container(
+              width: 400,
+              height: 400,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.red.withOpacity(0.12),
               ),
+            ),
+          ),
 
-            // --- Formulario de Contraseña ---
-            Form(
-              key: _formKey,
-              child: Column(
-                children: [
-                  TextFormField(
-                    obscureText: true,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: _getInputDecoration(
-                        'Contraseña'), // Usa el estilo Cyberpunk
-                    validator: (v) => v == null || v.isEmpty
-                        ? 'Ingresa tu contraseña para confirmar'
-                        : null,
-                    onSaved: (v) => _password = v!.trim(),
-                  ),
-                  const SizedBox(height: 40),
-
-                  // --- Botón de ELIMINAR (Rojo intenso, resaltando el peligro) ---
-                  _loading
-                      ? const CircularProgressIndicator(color: Colors.redAccent)
-                      : SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: _deleteAccount,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor:
-                                  Colors.redAccent, // Botón de PELIGRO
-                              padding: const EdgeInsets.symmetric(vertical: 15),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                side: const BorderSide(
-                                    color: Colors.red, width: 2),
+          SafeArea(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(22),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      /// BOTON ATRAS Y LOGO
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.cyan.withOpacity(0.12),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: Colors.cyanAccent.withOpacity(0.4),
                               ),
-                              elevation: 8,
-                              shadowColor: Colors.red.withOpacity(0.8),
                             ),
-                            child: const Text(
-                              'ELIMINAR CUENTA PERMANENTEMENTE',
-                              style: TextStyle(
-                                  fontSize: 18,
-                                  color: _darkBackground,
-                                  fontWeight: FontWeight.w900),
+                            child: IconButton(
+                              onPressed: () => Navigator.pop(context),
+                              icon: const Icon(
+                                Icons.arrow_back,
+                                color: Colors.cyanAccent,
+                              ),
                             ),
                           ),
-                        ),
-                  const SizedBox(height: 16),
+                          // Logo Stalky siempre visible
+                          Image.asset(
+                            'assets/logo/icon.png',
+                            height: 60,
+                            width: 60,
+                            errorBuilder: (_, __, ___) => const Icon(
+                              Icons.star,
+                              color: Color(0xFFD4AF37),
+                              size: 30,
+                            ),
+                          ),
+                        ],
+                      ),
 
-                  // --- Botón de Cancelar ---
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancelar / Regresar',
-                        style: TextStyle(color: _accentCyan)),
+                      const SizedBox(height: 25),
+
+                      /// TITULO
+                      const Text(
+                        "ELIMINAR CUENTA",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Color(0xFFFF3B3B),
+                          fontSize: 30,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 2,
+                          shadows: [
+                            Shadow(
+                              color: Colors.red,
+                              blurRadius: 15,
+                            )
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 35),
+
+                      /// ICONO DE ADVERTENCIA
+                      Container(
+                        padding: const EdgeInsets.all(22),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.red.withOpacity(0.08),
+                          border: Border.all(
+                            color: Colors.red.withOpacity(0.4),
+                            width: 2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.red.withOpacity(0.4),
+                              blurRadius: 30,
+                              spreadRadius: 5,
+                            )
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.warning_rounded,
+                          size: 95,
+                          color: Color(0xFFFF4D4D),
+                        ),
+                      ),
+
+                      const SizedBox(height: 35),
+
+                      /// SUBTITULO
+                      const Text(
+                        "ELIMINACIÓN TOTAL",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Color(0xFFFF5555),
+                          fontSize: 26,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1,
+                        ),
+                      ),
+
+                      const SizedBox(height: 10),
+
+                      const Text(
+                        "[PROTOCOLO CRÍTICO]",
+                        style: TextStyle(
+                          color: Color(0xFFFF8888),
+                          fontSize: 17,
+                          letterSpacing: 1,
+                        ),
+                      ),
+
+                      const SizedBox(height: 30),
+
+                      /// MENSAJE DE ERROR
+                      if (_error != null)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          margin: const EdgeInsets.only(bottom: 20),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withOpacity(0.2),
+                            border: Border.all(color: Colors.redAccent),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            _error!,
+                            style: const TextStyle(
+                                color: Colors.redAccent,
+                                fontWeight: FontWeight.bold),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+
+                      /// ALERTA (Texto informativo)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: Colors.red.withOpacity(0.25),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.red.withOpacity(0.12),
+                              blurRadius: 15,
+                            )
+                          ],
+                        ),
+                        child: const Text(
+                          "Esta acción es IRREVERSIBLE.\n\n"
+                          "Todos tus datos, progreso, configuraciones "
+                          "y acceso serán eliminados permanentemente "
+                          "del sistema.",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Color(0xFFFFB3B3),
+                            fontSize: 15,
+                            height: 1.7,
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 28),
+
+                      /// TEXTO DE CONFIRMACIÓN
+                      const Text(
+                        "Confirma tu contraseña para continuar.\n"
+                        "Una vez eliminada la cuenta no podrás recuperarla.",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 15,
+                          height: 1.7,
+                        ),
+                      ),
+
+                      const SizedBox(height: 35),
+
+                      /// INPUT DE CONTRASEÑA
+                      TextFormField(
+                        obscureText: true,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          hintText: "Confirmar contraseña",
+                          hintStyle: TextStyle(
+                            color: Colors.white.withOpacity(0.5),
+                          ),
+                          filled: true,
+                          fillColor: const Color(0xFF111111),
+                          prefixIcon: const Icon(
+                            Icons.lock,
+                            color: Color(0xFFFF4D4D),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            borderSide: BorderSide(
+                              color: Colors.red.withOpacity(0.4),
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            borderSide: const BorderSide(
+                              color: Colors.red,
+                              width: 2,
+                            ),
+                          ),
+                          errorBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            borderSide: const BorderSide(
+                              color: Colors.redAccent,
+                              width: 1,
+                            ),
+                          ),
+                          focusedErrorBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            borderSide: const BorderSide(
+                              color: Colors.red,
+                              width: 2,
+                            ),
+                          ),
+                          errorStyle: const TextStyle(color: Colors.redAccent),
+                        ),
+                        validator: (v) => v == null || v.isEmpty
+                            ? 'Contraseña requerida'
+                            : null,
+                        onSaved: (v) => _password = v!.trim(),
+                      ),
+
+                      const SizedBox(height: 40),
+
+                      /// BOTON ELIMINAR
+                      SizedBox(
+                        width: double.infinity,
+                        height: 65,
+                        child: ElevatedButton(
+                          onPressed: _loading ? null : _deleteAccount,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFFF2E2E),
+                            foregroundColor: Colors.white,
+                            disabledBackgroundColor: Colors.red.withOpacity(0.5),
+                            elevation: 15,
+                            shadowColor: Colors.red,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                          ),
+                          child: _loading
+                              ? const CircularProgressIndicator(
+                                  color: Colors.white)
+                              : const Text(
+                                  "ELIMINAR CUENTA\nPERMANENTEMENTE",
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 1,
+                                    height: 1.4,
+                                  ),
+                                ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 28),
+
+                      /// CANCELAR
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text(
+                          "Cancelar y regresar",
+                          style: TextStyle(
+                            color: Colors.cyanAccent,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 20),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
