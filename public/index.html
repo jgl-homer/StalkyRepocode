@@ -1,107 +1,353 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>En Construcción</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Arial', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            color: white;
-        }
-
-        .container {
-            text-align: center;
-            padding: 20px;
-            max-width: 600px;
-        }
-
-        .icon {
-            font-size: 80px;
-            margin-bottom: 20px;
-            animation: bounce 2s infinite;
-        }
-
-        h1 {
-            font-size: 3em;
-            margin-bottom: 20px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-        }
-
-        p {
-            font-size: 1.2em;
-            margin-bottom: 30px;
-            opacity: 0.9;
-        }
-
-        .progress-bar {
-            width: 100%;
-            height: 8px;
-            background: rgba(255,255,255,0.3);
-            border-radius: 10px;
-            overflow: hidden;
-            margin-top: 30px;
-        }
-
-        .progress {
-            width: 60%;
-            height: 100%;
-            background: white;
-            animation: loading 2s ease-in-out infinite;
-        }
-
-        @keyframes bounce {
-            0%, 100% {
-                transform: translateY(0);
-            }
-            50% {
-                transform: translateY(-20px);
-            }
-        }
-
-        @keyframes loading {
-            0% {
-                width: 0%;
-            }
-            50% {
-                width: 70%;
-            }
-            100% {
-                width: 100%;
-            }
-        }
-
-        .contact {
-            margin-top: 40px;
-            font-size: 0.9em;
-            opacity: 0.8;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="STAKLY — Gestiona tus tareas con inteligencia. Sincronizado en tiempo real con Firebase." />
+  <title>STAKLY — Gestor de Tareas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#D4AF37" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="STAKLY" />
+  <link rel="apple-touch-icon" href="assets/logo/icon.png" />
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-    <div class="container">
-        <div class="icon">🚧</div>
-        <h1>En Construcción</h1>
-        <p>Estamos trabajando para traerte algo increíble. ¡Vuelve pronto!</p>
-        
-        <div class="progress-bar">
-            <div class="progress"></div>
-        </div>
-        
-        <div class="contact">
-            <p>Para más información, contáctanos</p>
-        </div>
+
+  <!-- ══════════════════ AUTH SCREEN ══════════════════ -->
+  <div id="authScreen" class="screen active">
+    <div class="auth-bg">
+      <div class="auth-orb auth-orb-1"></div>
+      <div class="auth-orb auth-orb-2"></div>
     </div>
+
+    <!-- LOGIN -->
+    <div id="loginCard" class="auth-card">
+      <div class="auth-logo"><img src="assets/logo/icon.png" alt="STAKLY"></div>
+      <h1 class="auth-title">INICIAR SESIÓN</h1>
+      <p class="auth-subtitle">Bienvenido de vuelta</p>
+
+      <div id="loginError" class="error-box hidden"></div>
+
+      <div class="form-group">
+        <span class="input-icon">✉</span>
+        <input type="email" id="loginEmail" class="auth-input" placeholder="Correo electrónico" />
+      </div>
+      <div class="form-group">
+        <span class="input-icon">🔒</span>
+        <input type="password" id="loginPassword" class="auth-input" placeholder="Contraseña" />
+      </div>
+
+      <button class="forgot-link" id="forgotBtn" onclick="resetPassword()">Olvidé mi contraseña</button>
+
+      <button id="loginBtn" class="btn-gold" onclick="doLogin()">Iniciar Sesión</button>
+
+      <p class="auth-switch">¿No tienes cuenta? <span class="link-gold" onclick="showRegister()">Crear cuenta</span></p>
+    </div>
+
+    <!-- REGISTER -->
+    <div id="registerCard" class="auth-card hidden">
+      <div class="auth-logo"><img src="assets/logo/icon.png" alt="STAKLY"></div>
+      <h1 class="auth-title">CREAR CUENTA</h1>
+      <p class="auth-subtitle">Regístrate para comenzar</p>
+
+      <div id="registerError" class="error-box hidden"></div>
+
+      <div class="form-group">
+        <span class="input-icon">👤</span>
+        <input type="text" id="regName" class="auth-input" placeholder="Nombre de usuario" />
+      </div>
+      <div class="form-group">
+        <span class="input-icon">✉</span>
+        <input type="email" id="regEmail" class="auth-input" placeholder="Correo electrónico" />
+      </div>
+      <div class="form-group">
+        <span class="input-icon">🔒</span>
+        <input type="password" id="regPassword" class="auth-input" placeholder="Contraseña (mín. 6)" />
+      </div>
+
+      <button id="registerBtn" class="btn-gold" onclick="doRegister()">Crear Cuenta</button>
+
+      <p class="auth-switch">¿Ya tienes cuenta? <span class="link-gold" onclick="showLogin()">Iniciar sesión</span></p>
+    </div>
+
+    <!-- EMAIL VERIFICATION -->
+    <div id="verifyCard" class="auth-card hidden">
+      <div class="auth-logo"><img src="assets/logo/icon.png" alt="STAKLY"></div>
+      <h1 class="auth-title">VERIFICA TU CORREO</h1>
+      <p class="auth-subtitle">Enviamos un enlace de verificación a tu email. Revisa tu bandeja de entrada y haz clic en el enlace.</p>
+      <button class="btn-gold" onclick="checkVerification()">Ya verifiqué mi correo</button>
+      <button class="btn-outline" onclick="resendVerification()">Reenviar correo</button>
+      <button class="btn-link" onclick="doLogout()">Volver al inicio</button>
+    </div>
+  </div>
+
+  <!-- ══════════════════ MAIN APP ══════════════════ -->
+  <div id="appScreen" class="screen">
+
+    <!-- Top Bar -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <span class="topbar-logo"><img src="assets/logo/icon.png" alt="STAKLY" style="width:32px;height:32px"></span>
+        <span class="topbar-appname">STAKLY</span>
+      </div>
+      <div class="topbar-right">
+        <span class="topbar-greeting" id="topbarGreeting"></span>
+      </div>
+    </header>
+
+    <!-- Content Area (pages) -->
+    <main class="app-main" id="appMain">
+
+      <!-- ── HOME PAGE ── -->
+      <div id="pageHome" class="page active">
+        <div class="page-header">
+          <div>
+            <h2 class="page-hello" id="homeGreeting">Hola, ...</h2>
+            <p class="page-count" id="homePendingCount">0 TAREAS PENDIENTES</p>
+          </div>
+        </div>
+
+        <!-- Today's tasks -->
+        <div id="todaySection" class="task-section hidden">
+          <div class="section-header">
+            <span>Hoy</span>
+            <span class="section-badge" id="todayCount">0</span>
+          </div>
+          <div id="todayList" class="task-list"></div>
+        </div>
+
+        <!-- Upcoming tasks -->
+        <div id="upcomingSection" class="task-section hidden">
+          <div class="section-header">
+            <span>Próximamente</span>
+            <span class="section-badge" id="upcomingCount">0</span>
+          </div>
+          <div id="upcomingList" class="task-list"></div>
+        </div>
+
+        <!-- Empty state -->
+        <div id="homeEmpty" class="empty-state hidden">
+          <div class="empty-icon">✓</div>
+          <h3>Todo al día</h3>
+          <p>No tienes tareas pendientes.<br>¡Disfruta tu tiempo libre!</p>
+        </div>
+
+        <!-- Loading -->
+        <div id="homeLoading" class="loading-state">
+          <div class="spinner-gold"></div>
+        </div>
+
+        <!-- FAB -->
+        <button class="fab" id="fabBtn" onclick="openAddTask()">+</button>
+      </div>
+
+      <!-- ── AGENDA PAGE ── -->
+      <div id="pageAgenda" class="page">
+        <div class="page-header-simple">
+          <h2 class="page-title-lg">Agenda</h2>
+        </div>
+
+        <!-- Day selector -->
+        <div class="day-selector" id="daySelector"></div>
+
+        <!-- Selected date label -->
+        <p class="selected-date-label" id="selectedDateLabel"></p>
+
+        <!-- Agenda task list -->
+        <div id="agendaList" class="task-list agenda-list"></div>
+        <div id="agendaEmpty" class="empty-state hidden">
+          <div class="empty-icon">📅</div>
+          <h3>No hay eventos este día</h3>
+        </div>
+        <div id="agendaLoading" class="loading-state hidden">
+          <div class="spinner-gold"></div>
+        </div>
+      </div>
+
+      <!-- ── STATS PAGE ── -->
+      <div id="pageStats" class="page">
+        <div class="page-header-simple">
+          <h2 class="page-title-lg">Estadísticas</h2>
+        </div>
+
+        <!-- Score ring -->
+        <div class="score-ring-wrap">
+          <svg class="score-ring" viewBox="0 0 220 220">
+            <circle class="ring-track" cx="110" cy="110" r="90" />
+            <circle class="ring-fill" id="ringFill" cx="110" cy="110" r="90"
+              stroke-dasharray="565.49" stroke-dashoffset="565.49" />
+          </svg>
+          <div class="ring-inner">
+            <span class="ring-score" id="ringScore">0</span>
+            <span class="ring-slash">/100</span>
+            <span class="ring-label" id="ringLabel">Sin completar</span>
+          </div>
+        </div>
+
+        <!-- Stat cards -->
+        <div class="stats-row">
+          <div class="stat-card-dark">
+            <span class="stat-val" id="statTotal">0</span>
+            <span class="stat-lbl">Total</span>
+          </div>
+          <div class="stat-card-dark highlight">
+            <span class="stat-val gold" id="statDone">0</span>
+            <span class="stat-lbl">Completadas</span>
+          </div>
+          <div class="stat-card-dark">
+            <span class="stat-val" id="statPending">0</span>
+            <span class="stat-lbl">Pendientes</span>
+          </div>
+        </div>
+
+        <!-- Today progress -->
+        <div class="stats-card" id="todayProgress">
+          <div class="stats-card-header">
+            <span>Tareas de Hoy</span>
+            <span class="gold" id="todayProgressLabel">0/0</span>
+          </div>
+          <div class="progress-bar-wrap">
+            <div class="progress-bar-fill" id="todayProgressBar" style="width:0%"></div>
+          </div>
+          <p class="progress-note" id="todayProgressNote">No hay tareas para hoy</p>
+        </div>
+
+        <!-- Category breakdown -->
+        <div class="stats-card" id="catBreakdown"></div>
+      </div>
+
+      <!-- ── PROFILE PAGE ── -->
+      <div id="pageProfile" class="page">
+        <div class="page-header-simple">
+          <h2 class="page-title-lg">Ajustes</h2>
+        </div>
+
+        <!-- User card -->
+        <div class="profile-user-card">
+          <div class="profile-avatar">👤</div>
+          <h3 class="profile-name" id="profileName">Usuario</h3>
+          <p class="profile-email" id="profileEmail">email@correo.com</p>
+        </div>
+
+        <div id="profileError" class="error-box hidden"></div>
+
+        <!-- Name -->
+        <div class="form-group profile-field">
+          <span class="input-icon">👤</span>
+          <input type="text" id="profileNameInput" class="auth-input" placeholder="Nombre" />
+        </div>
+        <!-- Current password -->
+        <div class="form-group profile-field">
+          <span class="input-icon">🔒</span>
+          <input type="password" id="profileCurrentPw" class="auth-input" placeholder="Contraseña actual" />
+        </div>
+        <!-- New password -->
+        <div class="form-group profile-field">
+          <span class="input-icon">🔑</span>
+          <input type="password" id="profileNewPw" class="auth-input" placeholder="Nueva contraseña (opcional)" />
+        </div>
+
+        <button class="btn-gold" style="width:100%;margin-bottom:12px" onclick="saveProfile()">Guardar cambios</button>
+        <button class="btn-outline" style="width:100%;margin-bottom:12px" onclick="doLogout()">Cerrar Sesión</button>
+        <button class="btn-danger" style="width:100%" onclick="confirmDeleteAccount()">Eliminar cuenta</button>
+      </div>
+
+    </main>
+
+    <!-- Bottom Nav -->
+    <nav class="bottom-nav">
+      <button class="nav-btn active" id="navHome" onclick="switchPage('home')">
+        <span class="nav-icon">🏠</span>
+        <span class="nav-label">Inicio</span>
+      </button>
+      <button class="nav-btn" id="navAgenda" onclick="switchPage('agenda')">
+        <span class="nav-icon">📅</span>
+        <span class="nav-label">Agenda</span>
+      </button>
+      <button class="nav-btn" id="navStats" onclick="switchPage('stats')">
+        <span class="nav-icon">📊</span>
+        <span class="nav-label">Stats</span>
+      </button>
+      <button class="nav-btn" id="navProfile" onclick="switchPage('profile')">
+        <span class="nav-icon">⚙️</span>
+        <span class="nav-label">Ajustes</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- ══════════════════ ADD / EDIT TASK MODAL ══════════════════ -->
+  <div id="taskModal" class="modal-overlay hidden" onclick="closeModalOutside(event)">
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <h2 class="modal-title" id="modalTitle">Crear Recordatorio</h2>
+
+      <input type="text" id="taskTitleInput" class="task-title-input" placeholder="¿Qué necesitas hacer?" maxlength="120" />
+
+      <!-- Category chips -->
+      <p class="field-label">Categoría</p>
+      <div class="chips-row" id="categoryChips"></div>
+
+      <!-- Date pills -->
+      <p class="field-label">Fecha</p>
+      <div class="pills-row" id="datePills"></div>
+
+      <!-- Time pills -->
+      <p class="field-label">Hora</p>
+      <div class="pills-row" id="timePills"></div>
+
+      <!-- Priority -->
+      <p class="field-label">Prioridad</p>
+      <div class="chips-row" id="priorityChips"></div>
+
+      <!-- Subtasks -->
+      <p class="field-label">Subtareas</p>
+      <div id="subtasksList" style="margin-bottom:12px"></div>
+      <div class="form-group" style="display:flex; gap:10px">
+        <input type="text" id="newSubtaskInput" class="auth-input" style="padding-left:16px" placeholder="Nueva subtarea..." />
+        <button class="btn-gold" style="width:auto; padding:0 20px" onclick="addSubtask()">+</button>
+      </div>
+
+      <!-- Description -->
+      <p class="field-label">Nota adicional (Opcional)</p>
+      <textarea id="taskDescInput" class="task-desc-input" placeholder="Detalles..." rows="3" maxlength="300"></textarea>
+
+      <button id="saveTaskBtn" class="btn-gold" style="width:100%;margin-top:16px" onclick="saveTask()">Guardar Recordatorio</button>
+    </div>
+  </div>
+
+  <!-- ══════════════════ POMODORO MODAL ══════════════════ -->
+  <div id="pomodoroModal" class="modal-overlay hidden" onclick="closePomodoroOutside(event)">
+    <div class="modal-sheet pomodoro-sheet">
+      <div class="modal-handle"></div>
+      <p class="pomo-state" id="pomoState">CONCENTRACIÓN</p>
+      <p class="pomo-task" id="pomoTask"></p>
+
+      <div class="pomo-ring-wrap">
+        <svg class="pomo-ring" viewBox="0 0 260 260">
+          <circle class="pomo-track" cx="130" cy="130" r="110"/>
+          <circle class="pomo-fill" id="pomoFill" cx="130" cy="130" r="110"
+            stroke-dasharray="691.15" stroke-dashoffset="0"/>
+        </svg>
+        <div class="pomo-time" id="pomoTime">25:00</div>
+      </div>
+
+      <div class="pomo-controls">
+        <button class="pomo-btn-sm" onclick="resetPomodoro()">↺</button>
+        <button class="pomo-btn-play" id="pomoPlayBtn" onclick="togglePomodoro()">▶</button>
+        <button class="pomo-btn-sm" onclick="skipPomodoro()">⏭</button>
+      </div>
+      <button class="btn-link" onclick="closePomodoro()">Cerrar</button>
+    </div>
+  </div>
+
+  <!-- ══════════════════ TOAST ══════════════════ -->
+  <div id="toast" class="toast hidden"></div>
+
+  <script type="module" src="app.js"></script>
 </body>
 </html>

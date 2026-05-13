@@ -1,0 +1,16 @@
+{
+  "name": "STAKLY",
+  "short_name": "STAKLY",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#D4AF37",
+  "description": "Gestiona tus tareas con inteligencia. Sincronizado en tiempo real.",
+  "icons": [
+    {
+      "src": "assets/logo/icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
