@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 
 import 'add_task_page.dart' as addPage;
@@ -9,6 +11,13 @@ import 'profile.dart';
 import 'agenda_page.dart';
 import 'stats_page.dart';
 import 'pomodoro_page.dart';
+import 'gemini_assistant_page.dart';
+
+class UnifiedTask {
+  final String id;
+  final Map<String, dynamic> data;
+  UnifiedTask({required this.id, required this.data});
+}
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -19,15 +28,64 @@ class DashboardPage extends StatefulWidget {
 
 class _DashboardPageState extends State<DashboardPage> {
   int _selectedIndex = 0;
+  List<Map<String, dynamic>> _localTasks = [];
 
   // Colors
   final Color _bg = const Color(0xFF000000);
   final Color _gold = const Color(0xFFD4AF37);
   final Color _cardBg = const Color(0xFF1E1E1E);
 
+  @override
+  void initState() {
+    super.initState();
+    _loadLocalTasks();
+  }
+
+  Future<void> _loadLocalTasks() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'offline_tasks_${user.uid}';
+      final list = prefs.getStringList(key) ?? [];
+      final parsed = list.map((item) => jsonDecode(item) as Map<String, dynamic>).toList();
+      final pending = parsed.where((t) => t['completed'] == false).toList();
+      if (mounted) {
+        setState(() {
+          _localTasks = pending;
+        });
+      }
+    } catch (e) {
+      print('Error al cargar tareas locales: $e');
+    }
+  }
+
   Future<void> _deleteTask(String docId) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
+
+    if (docId.startsWith('local_')) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final key = 'offline_tasks_${user.uid}';
+        final list = prefs.getStringList(key) ?? [];
+        list.removeWhere((item) {
+          final map = jsonDecode(item) as Map;
+          return map['id'] == docId;
+        });
+        await prefs.setStringList(key, list);
+        await _loadLocalTasks();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: const Text('Tarea local eliminada con éxito', style: TextStyle(color: Colors.black)), backgroundColor: _gold),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error local: $e')));
+      }
+      return;
+    }
+
     try {
       await FirebaseFirestore.instance
           .collection('users')
@@ -46,6 +104,13 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   void _editTask(String docId, Map<String, dynamic> currentTaskData) {
+    if (docId.startsWith('local_')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Las tareas guardadas localmente no se pueden editar en modo offline.')),
+      );
+      return;
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -54,12 +119,34 @@ class _DashboardPageState extends State<DashboardPage> {
           initialData: currentTaskData,
         ),
       ),
-    ).then((_) => setState(() {}));
+    ).then((_) => _loadLocalTasks());
   }
 
   Future<void> _toggleTaskCompleted(String docId, bool currentStatus) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
+
+    if (docId.startsWith('local_')) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final key = 'offline_tasks_${user.uid}';
+        final list = prefs.getStringList(key) ?? [];
+        final updatedList = list.map((item) {
+          final map = jsonDecode(item) as Map<String, dynamic>;
+          if (map['id'] == docId) {
+            map['completed'] = !currentStatus;
+          }
+          return jsonEncode(map);
+        }).toList();
+        await prefs.setStringList(key, updatedList);
+        await _loadLocalTasks();
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error local: $e')));
+      }
+      return;
+    }
+
     try {
       await FirebaseFirestore.instance
           .collection('users')
@@ -187,28 +274,46 @@ class _DashboardPageState extends State<DashboardPage> {
         }
 
         if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.red)));
+          print('[DASHBOARD] [FIRESTORE_READ_ERROR] Error al leer tareas de Firestore: ${snapshot.error}');
         }
 
-        final tasks = snapshot.data?.docs ?? [];
-        final totalTasks = tasks.length;
+        final firestoreDocs = snapshot.data?.docs ?? [];
+        
+        // Unificar tareas locales y de Firestore
+        final List<UnifiedTask> allTasks = [];
+        for (var doc in firestoreDocs) {
+          allTasks.add(UnifiedTask(id: doc.id, data: doc.data() as Map<String, dynamic>));
+        }
+        for (var localT in _localTasks) {
+          allTasks.add(UnifiedTask(id: localT['id'].toString(), data: localT));
+        }
+
+        final totalTasks = allTasks.length;
 
         // Grouping
-        final List<QueryDocumentSnapshot> hoyTasks = [];
-        final List<QueryDocumentSnapshot> proxTasks = [];
+        final List<UnifiedTask> hoyTasks = [];
+        final List<UnifiedTask> proxTasks = [];
 
-        for (var doc in tasks) {
-          final data = doc.data() as Map<String, dynamic>;
-          if (data['dueDate'] != null && data['dueDate'] is Timestamp) {
-            final date = (data['dueDate'] as Timestamp).toDate();
+        for (var ut in allTasks) {
+          final data = ut.data;
+          DateTime? date;
+          if (data['dueDate'] != null) {
+            if (data['dueDate'] is Timestamp) {
+              date = (data['dueDate'] as Timestamp).toDate();
+            } else if (data['dueDate'] is String) {
+              date = DateTime.tryParse(data['dueDate']);
+            }
+          }
+          
+          if (date != null) {
             if (_isPastOrToday(date)) {
-              hoyTasks.add(doc);
+              hoyTasks.add(ut);
             } else {
-              proxTasks.add(doc);
+              proxTasks.add(ut);
             }
           } else {
             // No due date goes to upcoming
-            proxTasks.add(doc);
+            proxTasks.add(ut);
           }
         }
 
@@ -256,6 +361,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   ),
                 ],
               ),
+              _buildAIBanner(),
               Expanded(
                 child: totalTasks == 0
                     ? _buildEmptyState()
@@ -264,13 +370,13 @@ class _DashboardPageState extends State<DashboardPage> {
                           if (hoyTasks.isNotEmpty) ...[
                             _buildSectionHeader('Hoy', hoyTasks.length),
                             const SizedBox(height: 10),
-                            ...hoyTasks.map((doc) => _buildTaskCard(doc)),
+                            ...hoyTasks.map((ut) => _buildTaskCard(ut.id, ut.data)),
                             const SizedBox(height: 20),
                           ],
                           if (proxTasks.isNotEmpty) ...[
                             _buildSectionHeader('Próximamente', proxTasks.length),
                             const SizedBox(height: 10),
-                            ...proxTasks.map((doc) => _buildTaskCard(doc)),
+                            ...proxTasks.map((ut) => _buildTaskCard(ut.id, ut.data)),
                             const SizedBox(height: 80), // Padding for FAB
                           ]
                         ],
@@ -306,9 +412,7 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Widget _buildTaskCard(QueryDocumentSnapshot doc) {
-    final task = doc.data() as Map<String, dynamic>;
-    final docId = doc.id;
+  Widget _buildTaskCard(String docId, Map<String, dynamic> task) {
     final title = task['title'] ?? 'Sin título';
     final materia = task['materia'] ?? 'General';
     final bool isCompleted = task['completed'] ?? false;
@@ -324,9 +428,16 @@ class _DashboardPageState extends State<DashboardPage> {
     else if (materia.toLowerCase().contains('personal')) categoryColor = Colors.greenAccent;
 
     String timeStr = '';
-    if (task['dueDate'] != null && task['dueDate'] is Timestamp) {
-      final d = (task['dueDate'] as Timestamp).toDate();
-      if (d.year != 3000) timeStr = DateFormat('h:mm a').format(d);
+    if (task['dueDate'] != null) {
+      DateTime? d;
+      if (task['dueDate'] is Timestamp) {
+        d = (task['dueDate'] as Timestamp).toDate();
+      } else if (task['dueDate'] is String) {
+        d = DateTime.tryParse(task['dueDate']);
+      }
+      if (d != null && d.year != 3000) {
+        timeStr = DateFormat('h:mm a').format(d);
+      }
     }
 
     Color priorityColor;
@@ -400,6 +511,28 @@ class _DashboardPageState extends State<DashboardPage> {
                           ),
                         ),
                         const SizedBox(width: 8),
+                        if (task['isOffline'] == true) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.amber.withOpacity(0.4), width: 1),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.cloud_off, color: Colors.amber, size: 10),
+                                SizedBox(width: 4),
+                                Text(
+                                  'LOCAL',
+                                  style: TextStyle(color: Colors.amber, fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                        ],
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
@@ -468,6 +601,100 @@ class _DashboardPageState extends State<DashboardPage> {
                   ),
                 ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAIBanner() {
+    return Container(
+      margin: const EdgeInsets.only(top: 15, bottom: 20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFF3F51B5), // Deep purple-blue
+            Color(0xFF673AB7), // Purple
+            Color(0xFFD4AF37), // Accent Gold
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF673AB7).withOpacity(0.3),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const GeminiAssistantPage()),
+            ).then((_) {
+              _loadLocalTasks();
+              setState(() {});
+            });
+          },
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.white24,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Row(
+                              children: [
+                                Icon(Icons.auto_awesome, color: Colors.white, size: 12),
+                                SizedBox(width: 4),
+                                Text(
+                                  'ASISTENTE IA',
+                                  style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'Escanea tus Apuntes',
+                        style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Sube fotos de apuntes o pizarrones para crear tareas y flashcards automáticamente.',
+                        style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.4),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: const BoxDecoration(
+                    color: Colors.white24,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.chevron_right, color: Colors.white, size: 20),
+                ),
+              ],
+            ),
           ),
         ),
       ),

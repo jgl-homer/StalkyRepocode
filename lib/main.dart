@@ -37,13 +37,20 @@ Future<void> main() async {
   // 🔑 CORRECCIÓN CRÍTICA: Establecer la ubicación local para que tz.local funcione
   tz_package.setLocalLocation(tz_package.local);
 
-  // 🔒 4. INICIALIZACIÓN DE APP CHECK
+  // 🔒 4. INICIALIZACIÓN DE APP CHECK (debug para desarrollo/emulador)
   await FirebaseAppCheck.instance.activate(
-    androidProvider: AndroidProvider.playIntegrity,
+    androidProvider: AndroidProvider.debug,
     webProvider: ReCaptchaV3Provider(
       '6Lc1H_UrAAAAANltWq-pY11iXLcm83744gdTrbVn',
     ),
   );
+
+  // 👤 4b. Autenticación anónima de respaldo (garantiza uid para Firestore)
+  if (FirebaseAuth.instance.currentUser == null) {
+    try {
+      await FirebaseAuth.instance.signInAnonymously();
+    } catch (_) {}
+  }
 
   // 🚀 5. Inicializar el Servicio de Notificaciones (para notificaciones locales)
   final notificationService = NotificationService(); // Almacenar la instancia
@@ -81,7 +88,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'STAKLY',
+      title: 'Stalky',
       debugShowCheckedModeBanner: false,
       locale: DevicePreview.locale(context),
       builder: DevicePreview.appBuilder,

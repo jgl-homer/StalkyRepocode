@@ -1,15 +1,48 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Permite al usuario leer/escribir solo en su propio documento
-    match /users/{userId} {
-      allow read, update, delete: if request.auth.uid == userId;
-      allow create: if request.auth.uid != null;
 
-      // Permite al usuario leer/escribir en su subcolección de tareas
+    // ==========================================
+    // ⚠️ MODO DEPURACIÓN (SOLO PARA PRUEBAS)
+    // Descomenta las líneas de abajo para permitir acceso libre temporalmente:
+    // ==========================================
+    // match /{document=**} {
+    //   allow read, write: if true;
+    // }
+
+    // ==========================================
+    // 🔒 MODO SEGURO RECOMENDADO (CON AUTH)
+    // ==========================================
+    // Cualquier usuario autenticado (incluido anónimo) puede operar en su propio doc
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      // Subcolección de tareas
       match /tasks/{taskId} {
-        allow read, write: if request.auth.uid == userId;
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // Subcolección de flashcard sets generados por IA
+      match /flashcard_sets/{setId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // Otras subcolecciones relacionadas por si se utilizan en el futuro
+      match /flashcards/{id} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      match /ai_analysis/{id} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      match /generated_tasks/{id} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      match /study_sessions/{id} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
       }
     }
   }
-}
+}

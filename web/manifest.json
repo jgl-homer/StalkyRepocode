@@ -1,11 +1,11 @@
 {
-    "name": "acordate",
-    "short_name": "acordate",
+    "name": "Stalky",
+    "short_name": "Stalky",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#000000",
+    "theme_color": "#D4AF37",
+    "description": "Gestiona tus tareas con Stalky",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
