@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart'
     as tz_package; // Importación para tz.local
@@ -35,8 +36,17 @@ Future<void> main() async {
   // 🧭 3. INICIALIZAR LA BASE DE DATOS DE ZONA HORARIA
   tz.initializeTimeZones();
 
-  // 🔑 CORRECCIÓN CRÍTICA: Establecer la ubicación local para que tz.local funcione
-  tz_package.setLocalLocation(tz_package.local);
+  try {
+    final localTimezone = await FlutterTimezone.getLocalTimezone();
+    tz_package.setLocalLocation(
+      tz_package.getLocation(localTimezone.identifier),
+    );
+  } catch (e) {
+    tz_package.setLocalLocation(tz_package.getLocation('America/Mexico_City'));
+    if (kDebugMode) {
+      print('No se pudo detectar zona horaria local: $e');
+    }
+  }
 
   // 🔒 4. INICIALIZACIÓN DE APP CHECK (debug para desarrollo/emulador)
   await FirebaseAppCheck.instance.activate(
@@ -56,9 +66,6 @@ Future<void> main() async {
   // 🚀 5. Inicializar el Servicio de Notificaciones (para notificaciones locales)
   final notificationService = NotificationService(); // Almacenar la instancia
   await notificationService.initNotifications();
-
-  // 🧭 6. PROGRAMAR EL RECORDATORIO CONSTANTE <--- ¡NUEVA LÍNEA CLAVE!
-  await notificationService.scheduleConstantReminder();
 
   // 🔔 7. CONFIGURAR LISTENERS DE MENSAJES EN PRIMER PLANO (Foreground)
   FirebaseMessaging.onMessage.listen((RemoteMessage message) {

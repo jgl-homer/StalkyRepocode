@@ -1,8 +1,6 @@
-// Archivo: lib/services/notification_service.dart
-
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:timezone/timezone.dart' as tz;
 import 'package:flutter/foundation.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 class NotificationService {
   static final NotificationService _notificationService =
@@ -16,8 +14,11 @@ class NotificationService {
 
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
+  bool _initialized = false;
 
   Future<void> initNotifications() async {
+    if (_initialized) return;
+
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
 
@@ -35,10 +36,68 @@ class NotificationService {
     );
 
     await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+    _initialized = true;
+    await requestNotificationPermission();
   }
 
-  // 🔔 NUEVO MÉTODO: PROGRAMA EL RECORDATORIO CONSTANTE (GENÉRICO Y RECURRENTE)
+  Future<bool> requestNotificationPermission() async {
+    if (!_isAndroid) return true;
+
+    final androidPlugin =
+        flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+
+    final granted =
+        await androidPlugin?.requestNotificationsPermission() ?? true;
+    if (kDebugMode) {
+      print('Permiso de notificaciones: $granted');
+    }
+    return granted;
+  }
+
+  Future<bool> canScheduleExactNotifications() async {
+    if (!_isAndroid) return true;
+
+    final androidPlugin =
+        flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+
+    return await androidPlugin?.canScheduleExactNotifications() ?? true;
+  }
+
+  Future<bool> requestExactAlarmPermission() async {
+    if (!_isAndroid) return true;
+
+    final androidPlugin =
+        flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+
+    final granted = await androidPlugin?.requestExactAlarmsPermission() ?? true;
+    if (kDebugMode) {
+      print('Permiso de alarmas exactas: $granted');
+    }
+    return granted;
+  }
+
+  Future<AndroidScheduleMode> _resolveAndroidScheduleMode() async {
+    if (!_isAndroid) return AndroidScheduleMode.exactAllowWhileIdle;
+
+    if (await canScheduleExactNotifications()) {
+      return AndroidScheduleMode.exactAllowWhileIdle;
+    }
+
+    final granted = await requestExactAlarmPermission();
+    if (granted || await canScheduleExactNotifications()) {
+      return AndroidScheduleMode.exactAllowWhileIdle;
+    }
+
+    return AndroidScheduleMode.inexactAllowWhileIdle;
+  }
+
+  // Programa un recordatorio generico opcional. No se activa automaticamente.
   Future<void> scheduleConstantReminder() async {
+    await initNotifications();
+
     const int constantReminderId = 999999; // ID único y fijo
 
     // Título y cuerpo genéricos para revisión de tareas:
@@ -68,7 +127,7 @@ class NotificationService {
         ),
         iOS: DarwinNotificationDetails(),
       ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      androidScheduleMode: await _resolveAndroidScheduleMode(),
     );
 
     if (kDebugMode) {
@@ -83,6 +142,16 @@ class NotificationService {
     String body,
     DateTime scheduledDate,
   ) async {
+    await initNotifications();
+
+    final notificationsGranted = await requestNotificationPermission();
+    if (!notificationsGranted) {
+      if (kDebugMode) {
+        print('No se programo notificacion: permiso denegado.');
+      }
+      return;
+    }
+
     final tz.TZDateTime scheduledTime = tz.TZDateTime.from(
       scheduledDate,
       tz.local,
@@ -91,6 +160,8 @@ class NotificationService {
     if (scheduledTime.isBefore(tz.TZDateTime.now(tz.local))) {
       return;
     }
+
+    final scheduleMode = await _resolveAndroidScheduleMode();
 
     await flutterLocalNotificationsPlugin.zonedSchedule(
       id,
@@ -108,7 +179,7 @@ class NotificationService {
         ),
         iOS: DarwinNotificationDetails(),
       ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      androidScheduleMode: scheduleMode,
     );
   }
 
@@ -122,6 +193,8 @@ class NotificationService {
     required String? body,
     String? payload,
   }) async {
+    await initNotifications();
+
     const AndroidNotificationDetails androidDetails =
         AndroidNotificationDetails(
       'task_channel_id',
@@ -147,4 +220,7 @@ class NotificationService {
   Future<void> cancelAllNotifications() async {
     await flutterLocalNotificationsPlugin.cancelAll();
   }
+
+  bool get _isAndroid =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 }
