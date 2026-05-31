@@ -102,7 +102,7 @@ The app is organized around screens, services, and reusable widgets.
 .
 ├── android/
 │   └── app/
-│       ├── google-services.json
+│       ├── google-services.example.json
 │       └── src/main/AndroidManifest.xml
 │
 ├── assets/
@@ -117,7 +117,7 @@ The app is organized around screens, services, and reusable widgets.
 │   ├── add_task_page.dart
 │   ├── dashboard.dart
 │   ├── edit_task_page.dart
-│   ├── firebase_options.dart
+│   ├── firebase_options.example.dart
 │   ├── flashcards_page.dart
 │   ├── gemini_assistant_page.dart
 │   ├── login.dart
@@ -179,6 +179,23 @@ Place the Android Firebase config here:
 ```text
 android/app/google-services.json
 ```
+
+This file is intentionally ignored by Git. Use `android/app/google-services.example.json` only as a placeholder reference.
+
+Generate the Flutter Firebase options locally:
+
+```bash
+dart pub global activate flutterfire_cli
+flutterfire configure
+```
+
+This creates:
+
+```text
+lib/firebase_options.dart
+```
+
+That file is also ignored by Git because it contains project-specific Firebase keys.
 
 ## Google Sign-In
 
@@ -301,7 +318,17 @@ Before making this repository public, review:
 - Android signing files
 - Any local environment files
 
-Do not commit production keystores, private service accounts, or unrestricted API keys.
+Do not commit production keystores, private service accounts, unrestricted API keys, `google-services.json`, or generated Firebase options.
+
+Local-only files ignored by Git:
+
+```text
+.env
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+lib/firebase_options.dart
+public/
+```
 
 ## Roadmap
 

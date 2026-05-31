@@ -1,0 +1,23 @@
+{
+  "project_info": {
+    "project_number": "replace_with_project_number",
+    "project_id": "replace_with_project_id",
+    "storage_bucket": "replace_with_storage_bucket"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "replace_with_android_app_id",
+        "android_client_info": {
+          "package_name": "com.TaskingTech.android"
+        }
+      },
+      "api_key": [
+        {
+          "current_key": "replace_with_android_api_key"
+        }
+      ]
+    }
+  ],
+  "configuration_version": "1"
+}
