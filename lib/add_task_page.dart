@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
-import 'services/ai_service.dart';
 import 'services/notification_service.dart';
-import 'widgets/voice_dictation_button.dart';
 
 class AddTaskPage extends StatefulWidget {
   const AddTaskPage({super.key});
@@ -16,9 +14,7 @@ class AddTaskPage extends StatefulWidget {
 class _AddTaskPageState extends State<AddTaskPage> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
-  final TextEditingController _voiceController = TextEditingController();
   final NotificationService _notificationService = NotificationService();
-  final AIService _aiService = AIService();
 
   final Color _bg = const Color(0xFF000000);
   final Color _gold = const Color(0xFFD4AF37);
@@ -35,14 +31,11 @@ class _AddTaskPageState extends State<AddTaskPage> {
 
   DateTime _selectedDateTime = DateTime.now().add(const Duration(hours: 1));
   bool _isSaving = false;
-  bool _isVoiceListening = false;
-  bool _isAiVoiceSaving = false;
 
   @override
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
-    _voiceController.dispose();
     super.dispose();
   }
 
@@ -185,49 +178,6 @@ class _AddTaskPageState extends State<AddTaskPage> {
     }
   }
 
-  void _showGoldSnack(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message, style: const TextStyle(color: Colors.black)),
-        backgroundColor: _gold,
-      ),
-    );
-  }
-
-  Future<void> _saveVoiceReminder() async {
-    if (_isAiVoiceSaving || _isVoiceListening) return;
-
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    final transcript = _voiceController.text.trim();
-    if (transcript.isEmpty) {
-      _showGoldSnack('Dicta el recordatorio antes de guardarlo con IA.');
-      return;
-    }
-
-    setState(() => _isAiVoiceSaving = true);
-    try {
-      await _aiService.processVoiceReminder(
-        transcript: transcript,
-        userId: user.uid,
-      );
-
-      if (!mounted) return;
-      _showGoldSnack('Recordatorio creado por dictado con IA.');
-      Navigator.pop(context);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isAiVoiceSaving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString()),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -255,9 +205,6 @@ class _AddTaskPageState extends State<AddTaskPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildVoiceAiCard(),
-            const SizedBox(height: 26),
-
             // Title
             TextField(
               controller: _titleController,
@@ -396,111 +343,6 @@ class _AddTaskPageState extends State<AddTaskPage> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildVoiceAiCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _cardBg,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _gold.withValues(alpha: 0.32)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.auto_awesome, color: _gold, size: 20),
-              const SizedBox(width: 8),
-              const Expanded(
-                child: Text(
-                  'Dictado con IA',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              VoiceDictationButton(
-                controller: _voiceController,
-                gold: _gold,
-                backgroundColor: Colors.black,
-                tooltip: 'Dictar recordatorio',
-                onListeningChanged: (listening) {
-                  if (mounted) {
-                    setState(() => _isVoiceListening = listening);
-                  }
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _voiceController,
-            enabled: !_isAiVoiceSaving,
-            style: const TextStyle(color: Colors.white),
-            minLines: 2,
-            maxLines: 4,
-            decoration: InputDecoration(
-              hintText: 'Ej. Recuérdame entregar historia mañana a las 6 pm',
-              hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.35)),
-              filled: true,
-              fillColor: Colors.black,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide.none,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(color: _gold, width: 1.5),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: ElevatedButton.icon(
-              onPressed: _isAiVoiceSaving || _isVoiceListening
-                  ? null
-                  : _saveVoiceReminder,
-              icon: _isAiVoiceSaving
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        color: Colors.black,
-                        strokeWidth: 2,
-                      ),
-                    )
-                  : const Icon(Icons.bolt, color: Colors.black),
-              label: Text(
-                _isVoiceListening
-                    ? 'Escuchando...'
-                    : _isAiVoiceSaving
-                        ? 'Creando...'
-                        : 'Guardar automatico con IA',
-                style: const TextStyle(
-                  color: Colors.black,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _gold,
-                disabledBackgroundColor: _gold.withValues(alpha: 0.55),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                elevation: 0,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

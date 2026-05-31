@@ -131,7 +131,7 @@ class MyApp extends StatelessWidget {
             );
           }
 
-          if (snapshot.hasData) {
+          if (snapshot.hasData && snapshot.data?.isAnonymous == false) {
             return const DashboardPage();
           }
 

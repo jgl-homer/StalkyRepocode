@@ -1,8 +1,11 @@
 // 📁 lib/login.dart
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'register.dart';
 import 'dashboard.dart';
+import 'services/auth_service.dart';
 
 // ==================== LOGIN PAGE ====================
 class LoginPage extends StatefulWidget {
@@ -14,6 +17,7 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
+  final AuthService _authService = AuthService();
   String _email = '';
   String _password = '';
   String? _error;
@@ -63,6 +67,32 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  Future<void> _tryGoogleLogin() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      await _authService.signInWithGoogle();
+
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const DashboardPage()),
+        );
+      }
+    } on AuthServiceException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'No se pudo iniciar sesión con Google.');
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   // ==================== RESET PASSWORD ====================
   Future<void> _resetPassword() async {
     if (_email.isEmpty) {
@@ -93,7 +123,8 @@ class _LoginPageState extends State<LoginPage> {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Color(0xFFD4AF37), width: 1.5),
+                borderSide:
+                    const BorderSide(color: Color(0xFFD4AF37), width: 1.5),
               ),
             ),
           ),
@@ -192,7 +223,7 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.amber.withOpacity(0.25),
+                    color: Colors.amber.withValues(alpha: 0.25),
                     blurRadius: 30,
                     spreadRadius: 2,
                   ),
@@ -203,7 +234,6 @@ class _LoginPageState extends State<LoginPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-
                     // 🖼️ Logo
                     Image.asset(
                       'assets/logo/icon.png',
@@ -242,10 +272,10 @@ class _LoginPageState extends State<LoginPage> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 10),
                         decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(0.12),
+                          color: Colors.red.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                              color: Colors.redAccent.withOpacity(0.4)),
+                              color: Colors.redAccent.withValues(alpha: 0.4)),
                         ),
                         child: Text(
                           _error!,
@@ -307,7 +337,7 @@ class _LoginPageState extends State<LoginPage> {
                           backgroundColor: const Color(0xFFD4AF37),
                           foregroundColor: Colors.black,
                           disabledBackgroundColor:
-                              const Color(0xFFD4AF37).withOpacity(0.5),
+                              const Color(0xFFD4AF37).withValues(alpha: 0.5),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(15),
                           ),
@@ -329,6 +359,40 @@ class _LoginPageState extends State<LoginPage> {
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: OutlinedButton(
+                        onPressed: _isLoading ? null : _tryGoogleLogin,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.22),
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                          backgroundColor: const Color(0xFF242424),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const _GoogleMark(size: 24),
+                            const SizedBox(width: 10),
+                            const Text(
+                              'Continuar con Google',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
 
@@ -399,16 +463,73 @@ class _LoginPageState extends State<LoginPage> {
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(15),
-          borderSide:
-              const BorderSide(color: Colors.redAccent, width: 1.5),
+          borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
         ),
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(15),
-          borderSide:
-              const BorderSide(color: Colors.redAccent, width: 1.5),
+          borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
         ),
         errorStyle: const TextStyle(color: Colors.redAccent),
       ),
     );
   }
+}
+
+class _GoogleMark extends StatelessWidget {
+  const _GoogleMark({required this.size});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(painter: _GoogleMarkPainter()),
+    );
+  }
+}
+
+class _GoogleMarkPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final strokeWidth = size.width * 0.16;
+    final rect = Offset(strokeWidth / 2, strokeWidth / 2) &
+        Size(size.width - strokeWidth, size.height - strokeWidth);
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = strokeWidth;
+
+    void drawSegment(Color color, double start, double sweep) {
+      paint.color = color;
+      canvas.drawArc(rect, start, sweep, false, paint);
+    }
+
+    drawSegment(const Color(0xFF4285F4), -0.12 * math.pi, 0.48 * math.pi);
+    drawSegment(const Color(0xFF34A853), 0.42 * math.pi, 0.45 * math.pi);
+    drawSegment(const Color(0xFFFBBC05), 0.90 * math.pi, 0.42 * math.pi);
+    drawSegment(const Color(0xFFEA4335), 1.34 * math.pi, 0.42 * math.pi);
+
+    final bluePaint = Paint()
+      ..color = const Color(0xFF4285F4)
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.square
+      ..strokeWidth = strokeWidth;
+
+    final center = size.center(Offset.zero);
+    canvas.drawLine(
+      Offset(center.dx, center.dy),
+      Offset(size.width * 0.84, center.dy),
+      bluePaint,
+    );
+    canvas.drawLine(
+      Offset(size.width * 0.84, center.dy),
+      Offset(size.width * 0.84, size.height * 0.66),
+      bluePaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

@@ -12,6 +12,8 @@ import 'agenda_page.dart';
 import 'stats_page.dart';
 import 'pomodoro_page.dart';
 import 'gemini_assistant_page.dart';
+import 'services/ai_service.dart';
+import 'widgets/voice_dictation_button.dart';
 
 class UnifiedTask {
   final String id;
@@ -29,6 +31,10 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   int _selectedIndex = 0;
   List<Map<String, dynamic>> _localTasks = [];
+  final TextEditingController _voiceController = TextEditingController();
+  final AIService _aiService = AIService();
+  bool _isVoiceListening = false;
+  bool _isAiVoiceSaving = false;
 
   // Colors
   final Color _bg = const Color(0xFF000000);
@@ -39,6 +45,12 @@ class _DashboardPageState extends State<DashboardPage> {
   void initState() {
     super.initState();
     _loadLocalTasks();
+  }
+
+  @override
+  void dispose() {
+    _voiceController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadLocalTasks() async {
@@ -182,6 +194,204 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  void _showGoldSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: const TextStyle(color: Colors.black)),
+        backgroundColor: _gold,
+      ),
+    );
+  }
+
+  Future<void> _saveVoiceReminder(
+    StateSetter setSheetState,
+    BuildContext sheetContext,
+  ) async {
+    if (_isAiVoiceSaving || _isVoiceListening) return;
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final transcript = _voiceController.text.trim();
+    if (transcript.isEmpty) {
+      _showGoldSnack('Dicta el recordatorio antes de guardarlo con IA.');
+      return;
+    }
+
+    setState(() => _isAiVoiceSaving = true);
+    setSheetState(() {});
+
+    try {
+      await _aiService.processVoiceReminder(
+        transcript: transcript,
+        userId: user.uid,
+      );
+
+      if (!mounted || !sheetContext.mounted) return;
+      Navigator.of(sheetContext).pop();
+      _voiceController.clear();
+      setState(() => _isAiVoiceSaving = false);
+      await _loadLocalTasks();
+      _showGoldSnack('Recordatorio creado por dictado con IA.');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isAiVoiceSaving = false);
+      setSheetState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString()),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
+  }
+
+  void _openVoiceReminderSheet() {
+    _voiceController.clear();
+    setState(() {
+      _isVoiceListening = false;
+      _isAiVoiceSaving = false;
+    });
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: _cardBg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 20,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: _gold.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(14),
+                          border:
+                              Border.all(color: _gold.withValues(alpha: 0.45)),
+                        ),
+                        child: Icon(Icons.auto_awesome, color: _gold),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Text(
+                          'Dictado con IA',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      VoiceDictationButton(
+                        controller: _voiceController,
+                        gold: _gold,
+                        backgroundColor: Colors.black,
+                        tooltip: 'Dictar recordatorio',
+                        onTextChanged: (_) => setSheetState(() {}),
+                        onListeningChanged: (listening) {
+                          setState(() => _isVoiceListening = listening);
+                          setSheetState(() {});
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: _voiceController,
+                    enabled: !_isAiVoiceSaving,
+                    style: const TextStyle(color: Colors.white),
+                    minLines: 3,
+                    maxLines: 5,
+                    decoration: InputDecoration(
+                      hintText:
+                          'Ej. Recuerdame entregar historia mañana a las 6 pm',
+                      hintStyle: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.35),
+                      ),
+                      filled: true,
+                      fillColor: Colors.black,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: _gold, width: 1.5),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton.icon(
+                      onPressed: _isAiVoiceSaving || _isVoiceListening
+                          ? null
+                          : () =>
+                              _saveVoiceReminder(setSheetState, sheetContext),
+                      icon: _isAiVoiceSaving
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                color: Colors.black,
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : const Icon(Icons.bolt, color: Colors.black),
+                      label: Text(
+                        _isVoiceListening
+                            ? 'Escuchando...'
+                            : _isAiVoiceSaving
+                                ? 'Creando...'
+                                : 'Guardar automatico con IA',
+                        style: const TextStyle(
+                          color: Colors.black,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _gold,
+                        disabledBackgroundColor: _gold.withValues(alpha: 0.55),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        elevation: 0,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    ).whenComplete(() {
+      if (mounted) {
+        setState(() {
+          _isVoiceListening = false;
+          _isAiVoiceSaving = false;
+        });
+      }
+    });
+  }
+
   Widget _buildEmptyState() {
     return Center(
       child: Column(
@@ -241,18 +451,35 @@ class _DashboardPageState extends State<DashboardPage> {
       backgroundColor: _bg,
       body: SafeArea(child: screens[_selectedIndex]),
       floatingActionButton: _selectedIndex == 0
-          ? FloatingActionButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => const addPage.AddTaskPage()),
-                ).then((_) => setState(() {}));
-              },
-              backgroundColor: _gold,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
-              child: const Icon(Icons.add, color: Colors.black, size: 32),
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FloatingActionButton.small(
+                  heroTag: 'voice_reminder_fab',
+                  onPressed: _openVoiceReminderSheet,
+                  backgroundColor: _cardBg,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(color: _gold.withValues(alpha: 0.65)),
+                  ),
+                  child: Icon(Icons.mic_none_rounded, color: _gold),
+                ),
+                const SizedBox(height: 12),
+                FloatingActionButton(
+                  heroTag: 'add_task_fab',
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) => const addPage.AddTaskPage()),
+                    ).then((_) => setState(() {}));
+                  },
+                  backgroundColor: _gold,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
+                  child: const Icon(Icons.add, color: Colors.black, size: 32),
+                ),
+              ],
             )
           : null,
       bottomNavigationBar: Theme(
@@ -486,14 +713,15 @@ class _DashboardPageState extends State<DashboardPage> {
         subtasks.where((s) => s['completed'] == true).length;
 
     Color categoryColor = _gold;
-    if (materia.toLowerCase().contains('escuela'))
+    if (materia.toLowerCase().contains('escuela')) {
       categoryColor = Colors.blueAccent;
-    else if (materia.toLowerCase().contains('trabajo'))
+    } else if (materia.toLowerCase().contains('trabajo')) {
       categoryColor = Colors.orangeAccent;
-    else if (materia.toLowerCase().contains('pagos'))
+    } else if (materia.toLowerCase().contains('pagos')) {
       categoryColor = Colors.redAccent;
-    else if (materia.toLowerCase().contains('personal'))
+    } else if (materia.toLowerCase().contains('personal')) {
       categoryColor = Colors.greenAccent;
+    }
 
     String timeStr = '';
     if (task['dueDate'] != null) {

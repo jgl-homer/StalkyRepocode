@@ -1,4 +1,4 @@
-package com.example.acordate
+package com.TaskingTech.android
 
 import io.flutter.embedding.android.FlutterActivity
 

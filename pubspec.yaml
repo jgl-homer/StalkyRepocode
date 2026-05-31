@@ -42,6 +42,7 @@ dependencies:
   stream_channel: ^2.1.2
   google_generative_ai: ^0.4.6
   speech_to_text: ^7.4.0
+  google_sign_in: ^7.2.0
 
 dev_dependencies:
   flutter_test:
@@ -59,8 +60,9 @@ flutter:
     - assets/logo/
     - assets/sounds/
 
-flutter_icons:
+flutter_launcher_icons:
   android: true
   ios: true
+  remove_alpha_ios: true
   # 🔑 Ruta del ícono para el lanzador (Icono principal de la app)
-  image_path: "assets/icon/icon.png"
+  image_path: "assets/logo/icon.png"

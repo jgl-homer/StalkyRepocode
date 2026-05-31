@@ -113,6 +113,12 @@ class _VoiceDictationButtonState extends State<VoiceDictationButton> {
   }
 
   @override
+  void dispose() {
+    _speech.stop();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final Color activeColor = _isListening ? Colors.redAccent : widget.gold;
 
