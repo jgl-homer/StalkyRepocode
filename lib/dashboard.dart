@@ -48,7 +48,8 @@ class _DashboardPageState extends State<DashboardPage> {
       final prefs = await SharedPreferences.getInstance();
       final key = 'offline_tasks_${user.uid}';
       final list = prefs.getStringList(key) ?? [];
-      final parsed = list.map((item) => jsonDecode(item) as Map<String, dynamic>).toList();
+      final parsed =
+          list.map((item) => jsonDecode(item) as Map<String, dynamic>).toList();
       final pending = parsed.where((t) => t['completed'] == false).toList();
       if (mounted) {
         setState(() {
@@ -77,11 +78,15 @@ class _DashboardPageState extends State<DashboardPage> {
         await _loadLocalTasks();
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: const Text('Tarea local eliminada con éxito', style: TextStyle(color: Colors.black)), backgroundColor: _gold),
+          SnackBar(
+              content: const Text('Tarea local eliminada con éxito',
+                  style: TextStyle(color: Colors.black)),
+              backgroundColor: _gold),
         );
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error local: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error local: $e')));
       }
       return;
     }
@@ -95,18 +100,24 @@ class _DashboardPageState extends State<DashboardPage> {
           .delete();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: const Text('Tarea eliminada con éxito', style: TextStyle(color: Colors.black)), backgroundColor: _gold),
+        SnackBar(
+            content: const Text('Tarea eliminada con éxito',
+                style: TextStyle(color: Colors.black)),
+            backgroundColor: _gold),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
   void _editTask(String docId, Map<String, dynamic> currentTaskData) {
     if (docId.startsWith('local_')) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Las tareas guardadas localmente no se pueden editar en modo offline.')),
+        const SnackBar(
+            content: Text(
+                'Las tareas guardadas localmente no se pueden editar en modo offline.')),
       );
       return;
     }
@@ -142,7 +153,8 @@ class _DashboardPageState extends State<DashboardPage> {
         await _loadLocalTasks();
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error local: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error local: $e')));
       }
       return;
     }
@@ -156,7 +168,8 @@ class _DashboardPageState extends State<DashboardPage> {
           .update({'completed': !currentStatus});
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
@@ -174,11 +187,13 @@ class _DashboardPageState extends State<DashboardPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.check_circle_outline, size: 80, color: _gold.withOpacity(0.5)),
+          Icon(Icons.check_circle_outline,
+              size: 80, color: _gold.withOpacity(0.5)),
           const SizedBox(height: 20),
           const Text(
             'Todo al día',
-            style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+            style: TextStyle(
+                color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 10),
           const Text(
@@ -193,7 +208,9 @@ class _DashboardPageState extends State<DashboardPage> {
 
   bool _isToday(DateTime date) {
     final now = DateTime.now();
-    return date.year == now.year && date.month == now.month && date.day == now.day;
+    return date.year == now.year &&
+        date.month == now.month &&
+        date.day == now.day;
   }
 
   bool _isPastOrToday(DateTime date) {
@@ -207,7 +224,10 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      return const Scaffold(body: Center(child: Text('Usuario no autenticado', style: TextStyle(color: Colors.white))));
+      return const Scaffold(
+          body: Center(
+              child: Text('Usuario no autenticado',
+                  style: TextStyle(color: Colors.white))));
     }
 
     final screens = [
@@ -225,11 +245,13 @@ class _DashboardPageState extends State<DashboardPage> {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const addPage.AddTaskPage()),
+                  MaterialPageRoute(
+                      builder: (context) => const addPage.AddTaskPage()),
                 ).then((_) => setState(() {}));
               },
               backgroundColor: _gold,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
               child: const Icon(Icons.add, color: Colors.black, size: 32),
             )
           : null,
@@ -248,10 +270,22 @@ class _DashboardPageState extends State<DashboardPage> {
           currentIndex: _selectedIndex,
           onTap: (index) => setState(() => _selectedIndex = index),
           items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home), label: 'Inicio'),
-            BottomNavigationBarItem(icon: Icon(Icons.calendar_today_outlined), activeIcon: Icon(Icons.calendar_today), label: 'Agenda'),
-            BottomNavigationBarItem(icon: Icon(Icons.bar_chart_outlined), activeIcon: Icon(Icons.bar_chart), label: 'Stats'),
-            BottomNavigationBarItem(icon: Icon(Icons.person_outline), activeIcon: Icon(Icons.person), label: 'Ajustes'),
+            BottomNavigationBarItem(
+                icon: Icon(Icons.home_outlined),
+                activeIcon: Icon(Icons.home),
+                label: 'Inicio'),
+            BottomNavigationBarItem(
+                icon: Icon(Icons.calendar_today_outlined),
+                activeIcon: Icon(Icons.calendar_today),
+                label: 'Agenda'),
+            BottomNavigationBarItem(
+                icon: Icon(Icons.bar_chart_outlined),
+                activeIcon: Icon(Icons.bar_chart),
+                label: 'Stats'),
+            BottomNavigationBarItem(
+                icon: Icon(Icons.person_outline),
+                activeIcon: Icon(Icons.person),
+                label: 'Ajustes'),
           ],
         ),
       ),
@@ -274,15 +308,17 @@ class _DashboardPageState extends State<DashboardPage> {
         }
 
         if (snapshot.hasError) {
-          print('[DASHBOARD] [FIRESTORE_READ_ERROR] Error al leer tareas de Firestore: ${snapshot.error}');
+          print(
+              '[DASHBOARD] [FIRESTORE_READ_ERROR] Error al leer tareas de Firestore: ${snapshot.error}');
         }
 
         final firestoreDocs = snapshot.data?.docs ?? [];
-        
+
         // Unificar tareas locales y de Firestore
         final List<UnifiedTask> allTasks = [];
         for (var doc in firestoreDocs) {
-          allTasks.add(UnifiedTask(id: doc.id, data: doc.data() as Map<String, dynamic>));
+          allTasks.add(UnifiedTask(
+              id: doc.id, data: doc.data() as Map<String, dynamic>));
         }
         for (var localT in _localTasks) {
           allTasks.add(UnifiedTask(id: localT['id'].toString(), data: localT));
@@ -304,7 +340,7 @@ class _DashboardPageState extends State<DashboardPage> {
               date = DateTime.tryParse(data['dueDate']);
             }
           }
-          
+
           if (date != null) {
             if (_isPastOrToday(date)) {
               hoyTasks.add(ut);
@@ -331,25 +367,44 @@ class _DashboardPageState extends State<DashboardPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       FutureBuilder<DocumentSnapshot>(
-                        future: FirebaseFirestore.instance.collection('users').doc(user.uid).get(),
+                        future: FirebaseFirestore.instance
+                            .collection('users')
+                            .doc(user.uid)
+                            .get(),
                         builder: (context, userSnapshot) {
-                          String name = user.displayName?.split(' ').first ?? 'Usuario';
-                          if (userSnapshot.hasData && userSnapshot.data!.exists) {
-                            final data = userSnapshot.data!.data() as Map<String, dynamic>?;
-                            if (data != null && data['name'] != null && data['name'].toString().trim().isNotEmpty) {
-                              name = data['name'].toString().trim().split(' ').first;
+                          String name =
+                              user.displayName?.split(' ').first ?? 'Usuario';
+                          if (userSnapshot.hasData &&
+                              userSnapshot.data!.exists) {
+                            final data = userSnapshot.data!.data()
+                                as Map<String, dynamic>?;
+                            if (data != null &&
+                                data['name'] != null &&
+                                data['name'].toString().trim().isNotEmpty) {
+                              name = data['name']
+                                  .toString()
+                                  .trim()
+                                  .split(' ')
+                                  .first;
                             }
                           }
                           return Text(
                             'Hola, $name',
-                            style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold),
                           );
                         },
                       ),
                       const SizedBox(height: 5),
                       Text(
                         '$totalTasks TAREAS PENDIENTES',
-                        style: TextStyle(color: _gold, fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: 1.2),
+                        style: TextStyle(
+                            color: _gold,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 1.2),
                       ),
                     ],
                   ),
@@ -357,7 +412,8 @@ class _DashboardPageState extends State<DashboardPage> {
                     'assets/logo/icon.png',
                     height: 64,
                     width: 64,
-                    errorBuilder: (_, __, ___) => Icon(Icons.star, color: _gold, size: 32),
+                    errorBuilder: (_, __, ___) =>
+                        Icon(Icons.star, color: _gold, size: 32),
                   ),
                 ],
               ),
@@ -370,13 +426,16 @@ class _DashboardPageState extends State<DashboardPage> {
                           if (hoyTasks.isNotEmpty) ...[
                             _buildSectionHeader('Hoy', hoyTasks.length),
                             const SizedBox(height: 10),
-                            ...hoyTasks.map((ut) => _buildTaskCard(ut.id, ut.data)),
+                            ...hoyTasks
+                                .map((ut) => _buildTaskCard(ut.id, ut.data)),
                             const SizedBox(height: 20),
                           ],
                           if (proxTasks.isNotEmpty) ...[
-                            _buildSectionHeader('Próximamente', proxTasks.length),
+                            _buildSectionHeader(
+                                'Próximamente', proxTasks.length),
                             const SizedBox(height: 10),
-                            ...proxTasks.map((ut) => _buildTaskCard(ut.id, ut.data)),
+                            ...proxTasks
+                                .map((ut) => _buildTaskCard(ut.id, ut.data)),
                             const SizedBox(height: 80), // Padding for FAB
                           ]
                         ],
@@ -395,7 +454,8 @@ class _DashboardPageState extends State<DashboardPage> {
       children: [
         Text(
           title,
-          style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+          style: const TextStyle(
+              color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
         ),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -405,7 +465,10 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
           child: Text(
             count.toString(),
-            style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
+            style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 12,
+                fontWeight: FontWeight.bold),
           ),
         ),
       ],
@@ -419,13 +482,18 @@ class _DashboardPageState extends State<DashboardPage> {
     final String description = (task['description'] ?? '').toString().trim();
     final String priority = task['priority'] ?? 'media';
     final List subtasks = (task['subtasks'] as List?) ?? [];
-    final int subtasksDone = subtasks.where((s) => s['completed'] == true).length;
+    final int subtasksDone =
+        subtasks.where((s) => s['completed'] == true).length;
 
     Color categoryColor = _gold;
-    if (materia.toLowerCase().contains('escuela')) categoryColor = Colors.blueAccent;
-    else if (materia.toLowerCase().contains('trabajo')) categoryColor = Colors.orangeAccent;
-    else if (materia.toLowerCase().contains('pagos')) categoryColor = Colors.redAccent;
-    else if (materia.toLowerCase().contains('personal')) categoryColor = Colors.greenAccent;
+    if (materia.toLowerCase().contains('escuela'))
+      categoryColor = Colors.blueAccent;
+    else if (materia.toLowerCase().contains('trabajo'))
+      categoryColor = Colors.orangeAccent;
+    else if (materia.toLowerCase().contains('pagos'))
+      categoryColor = Colors.redAccent;
+    else if (materia.toLowerCase().contains('personal'))
+      categoryColor = Colors.greenAccent;
 
     String timeStr = '';
     if (task['dueDate'] != null) {
@@ -443,9 +511,17 @@ class _DashboardPageState extends State<DashboardPage> {
     Color priorityColor;
     String priorityLabel;
     switch (priority) {
-      case 'alta': priorityColor = Colors.redAccent;  priorityLabel = 'ALTA';  break;
-      case 'baja': priorityColor = Colors.greenAccent; priorityLabel = 'BAJA'; break;
-      default:     priorityColor = _gold;              priorityLabel = 'MEDIA';
+      case 'alta':
+        priorityColor = Colors.redAccent;
+        priorityLabel = 'ALTA';
+        break;
+      case 'baja':
+        priorityColor = Colors.greenAccent;
+        priorityLabel = 'BAJA';
+        break;
+      default:
+        priorityColor = _gold;
+        priorityLabel = 'MEDIA';
     }
 
     return Dismissible(
@@ -453,7 +529,8 @@ class _DashboardPageState extends State<DashboardPage> {
       direction: DismissDirection.endToStart,
       background: Container(
         margin: const EdgeInsets.symmetric(vertical: 6),
-        decoration: BoxDecoration(color: Colors.redAccent, borderRadius: BorderRadius.circular(16)),
+        decoration: BoxDecoration(
+            color: Colors.redAccent, borderRadius: BorderRadius.circular(16)),
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20.0),
         child: const Icon(Icons.delete, color: Colors.white),
@@ -485,7 +562,9 @@ class _DashboardPageState extends State<DashboardPage> {
                       border: Border.all(color: _gold, width: 2),
                       color: isCompleted ? _gold : Colors.transparent,
                     ),
-                    child: isCompleted ? const Icon(Icons.check, size: 16, color: Colors.black) : null,
+                    child: isCompleted
+                        ? const Icon(Icons.check, size: 16, color: Colors.black)
+                        : null,
                   ),
                 ),
               ),
@@ -506,27 +585,36 @@ class _DashboardPageState extends State<DashboardPage> {
                               color: Colors.white,
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
-                              decoration: isCompleted ? TextDecoration.lineThrough : null,
+                              decoration: isCompleted
+                                  ? TextDecoration.lineThrough
+                                  : null,
                             ),
                           ),
                         ),
                         const SizedBox(width: 8),
                         if (task['isOffline'] == true) ...[
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
                               color: Colors.amber.withOpacity(0.15),
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.amber.withOpacity(0.4), width: 1),
+                              border: Border.all(
+                                  color: Colors.amber.withOpacity(0.4),
+                                  width: 1),
                             ),
                             child: const Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.cloud_off, color: Colors.amber, size: 10),
+                                Icon(Icons.cloud_off,
+                                    color: Colors.amber, size: 10),
                                 SizedBox(width: 4),
                                 Text(
                                   'LOCAL',
-                                  style: TextStyle(color: Colors.amber, fontSize: 10, fontWeight: FontWeight.bold),
+                                  style: TextStyle(
+                                      color: Colors.amber,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold),
                                 ),
                               ],
                             ),
@@ -534,15 +622,21 @@ class _DashboardPageState extends State<DashboardPage> {
                           const SizedBox(width: 8),
                         ],
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
                             color: priorityColor.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: priorityColor.withValues(alpha: 0.4), width: 1),
+                            border: Border.all(
+                                color: priorityColor.withValues(alpha: 0.4),
+                                width: 1),
                           ),
                           child: Text(
                             priorityLabel,
-                            style: TextStyle(color: priorityColor, fontSize: 10, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                                color: priorityColor,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold),
                           ),
                         ),
                       ],
@@ -552,7 +646,8 @@ class _DashboardPageState extends State<DashboardPage> {
                       const SizedBox(height: 4),
                       Text(
                         description,
-                        style: const TextStyle(color: Colors.white38, fontSize: 12),
+                        style: const TextStyle(
+                            color: Colors.white38, fontSize: 12),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -564,27 +659,35 @@ class _DashboardPageState extends State<DashboardPage> {
                         Container(
                           width: 8,
                           height: 8,
-                          decoration: BoxDecoration(shape: BoxShape.circle, color: categoryColor),
+                          decoration: BoxDecoration(
+                              shape: BoxShape.circle, color: categoryColor),
                         ),
                         const SizedBox(width: 6),
                         Flexible(
                           child: Text(
                             materia,
-                            style: const TextStyle(color: Colors.white70, fontSize: 12),
+                            style: const TextStyle(
+                                color: Colors.white70, fontSize: 12),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         if (timeStr.isNotEmpty) ...[
                           const SizedBox(width: 10),
-                          const Icon(Icons.access_time, color: Colors.white54, size: 12),
+                          const Icon(Icons.access_time,
+                              color: Colors.white54, size: 12),
                           const SizedBox(width: 3),
-                          Text(timeStr, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                          Text(timeStr,
+                              style: const TextStyle(
+                                  color: Colors.white54, fontSize: 12)),
                         ],
                         if (subtasks.isNotEmpty) ...[
                           const SizedBox(width: 10),
-                          const Icon(Icons.checklist_rounded, color: Colors.white38, size: 13),
+                          const Icon(Icons.checklist_rounded,
+                              color: Colors.white38, size: 13),
                           const SizedBox(width: 3),
-                          Text('$subtasksDone/${subtasks.length}', style: const TextStyle(color: Colors.white38, fontSize: 12)),
+                          Text('$subtasksDone/${subtasks.length}',
+                              style: const TextStyle(
+                                  color: Colors.white38, fontSize: 12)),
                         ],
                       ],
                     ),
@@ -597,7 +700,8 @@ class _DashboardPageState extends State<DashboardPage> {
                   onTap: () => _startPomodoro(context, title),
                   child: const Padding(
                     padding: EdgeInsets.only(left: 4, top: 2),
-                    child: Icon(Icons.play_arrow_rounded, color: Colors.white38, size: 24),
+                    child: Icon(Icons.play_arrow_rounded,
+                        color: Colors.white38, size: 24),
                   ),
                 ),
             ],
@@ -635,7 +739,8 @@ class _DashboardPageState extends State<DashboardPage> {
           onTap: () {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const GeminiAssistantPage()),
+              MaterialPageRoute(
+                  builder: (context) => const GeminiAssistantPage()),
             ).then((_) {
               _loadLocalTasks();
               setState(() {});
@@ -653,18 +758,23 @@ class _DashboardPageState extends State<DashboardPage> {
                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
                               color: Colors.white24,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: const Row(
                               children: [
-                                Icon(Icons.auto_awesome, color: Colors.white, size: 12),
+                                Icon(Icons.auto_awesome,
+                                    color: Colors.white, size: 12),
                                 SizedBox(width: 4),
                                 Text(
                                   'ASISTENTE IA',
-                                  style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                  style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold),
                                 ),
                               ],
                             ),
@@ -674,12 +784,16 @@ class _DashboardPageState extends State<DashboardPage> {
                       const SizedBox(height: 10),
                       const Text(
                         'Escanea tus Apuntes',
-                        style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 6),
                       const Text(
-                        'Sube fotos de apuntes o pizarrones para crear tareas y flashcards automáticamente.',
-                        style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.4),
+                        'Sube fotos de apuntes o pizarrones para crear tareas automáticamente.',
+                        style: TextStyle(
+                            color: Colors.white70, fontSize: 12, height: 1.4),
                       ),
                     ],
                   ),
@@ -691,7 +805,8 @@ class _DashboardPageState extends State<DashboardPage> {
                     color: Colors.white24,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.chevron_right, color: Colors.white, size: 20),
+                  child: const Icon(Icons.chevron_right,
+                      color: Colors.white, size: 20),
                 ),
               ],
             ),

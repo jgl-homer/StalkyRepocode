@@ -1,6 +1,7 @@
 // Archivo: lib/main.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
@@ -75,10 +76,12 @@ Future<void> main() async {
   });
 
   runApp(
-    DevicePreview(
-      enabled: true,
-      builder: (context) => const MyApp(),
-    ),
+    kReleaseMode
+        ? const MyApp()
+        : DevicePreview(
+            enabled: true,
+            builder: (context) => const MyApp(),
+          ),
   );
 }
 
@@ -90,8 +93,8 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Stalky',
       debugShowCheckedModeBanner: false,
-      locale: DevicePreview.locale(context),
-      builder: DevicePreview.appBuilder,
+      locale: kReleaseMode ? null : DevicePreview.locale(context),
+      builder: kReleaseMode ? null : DevicePreview.appBuilder,
       theme: ThemeData(
         brightness: Brightness.dark,
         scaffoldBackgroundColor: Colors.black,
@@ -123,7 +126,8 @@ class MyApp extends StatelessWidget {
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Scaffold(
-              body: Center(child: CircularProgressIndicator(color: Color(0xFFD4AF37))),
+              body: Center(
+                  child: CircularProgressIndicator(color: Color(0xFFD4AF37))),
             );
           }
 

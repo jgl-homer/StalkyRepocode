@@ -54,6 +54,7 @@ flutter:
   # 🖼️ SECCIÓN DE ASSETS: DESCOMENTADA Y CONFIGURADA
   # Esta línea es CLAVE para que Flutter encuentre tu logo en dashboard.dart
   assets:
+    - secrets.json
     - assets/logo/
     - assets/sounds/
 

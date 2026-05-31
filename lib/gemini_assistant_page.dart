@@ -1,19 +1,9 @@
-import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'services/ai_service.dart';
-import 'flashcards_page.dart';
-
-class UnifiedFlashcardSet {
-  final String id;
-  final Map<String, dynamic> data;
-  UnifiedFlashcardSet({required this.id, required this.data});
-}
 
 class GeminiAssistantPage extends StatefulWidget {
   const GeminiAssistantPage({super.key});
@@ -22,9 +12,7 @@ class GeminiAssistantPage extends StatefulWidget {
   State<GeminiAssistantPage> createState() => _GeminiAssistantPageState();
 }
 
-class _GeminiAssistantPageState extends State<GeminiAssistantPage>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _GeminiAssistantPageState extends State<GeminiAssistantPage> {
   final AIService _aiService = AIService();
   final ImagePicker _imagePicker = ImagePicker();
 
@@ -35,20 +23,6 @@ class _GeminiAssistantPageState extends State<GeminiAssistantPage>
   Uint8List? _imageBytes;
   bool _isLoading = false;
   List<String> _analysisLogs = [];
-  List<Map<String, dynamic>> _localFlashcardSets = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-    _loadLocalFlashcardSets();
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
 
   // ── Selección de imagen ───────────────────────────────────────────────────
 
@@ -87,9 +61,7 @@ class _GeminiAssistantPageState extends State<GeminiAssistantPage>
           children: [
             Text('Seleccionar Origen',
                 style: GoogleFonts.outfit(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: _gold)),
+                    fontSize: 18, fontWeight: FontWeight.bold, color: _gold)),
             const SizedBox(height: 24),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -142,24 +114,6 @@ class _GeminiAssistantPageState extends State<GeminiAssistantPage>
 
   // ── Análisis IA ───────────────────────────────────────────────────────────
 
-  Future<void> _loadLocalFlashcardSets() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final key = 'offline_flashcard_sets_${user.uid}';
-      final list = prefs.getStringList(key) ?? [];
-      final parsed = list.map((item) => jsonDecode(item) as Map<String, dynamic>).toList();
-      if (mounted) {
-        setState(() {
-          _localFlashcardSets = parsed;
-        });
-      }
-    } catch (e) {
-      print('Error al cargar flashcard sets locales: $e');
-    }
-  }
-
   Future<void> _analyzeImage() async {
     if (_imageBytes == null) return;
 
@@ -196,9 +150,6 @@ class _GeminiAssistantPageState extends State<GeminiAssistantPage>
       );
 
       if (!mounted) return;
-      
-      // Volver a cargar sets locales (por si alguno se guardó localmente como fallback)
-      await _loadLocalFlashcardSets();
 
       setState(() {
         _analysisLogs = List<String>.from(result['logs'] ?? []);
@@ -243,26 +194,9 @@ class _GeminiAssistantPageState extends State<GeminiAssistantPage>
         backgroundColor: _bg,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: _gold,
-          labelColor: _gold,
-          unselectedLabelColor: Colors.white54,
-          labelStyle: GoogleFonts.inter(fontWeight: FontWeight.bold),
-          tabs: const [
-            Tab(text: 'Analizar Apunte'),
-            Tab(text: 'Mis Flashcards'),
-          ],
-        ),
       ),
       body: SafeArea(
-        child: TabBarView(
-          controller: _tabController,
-          children: [
-            _buildAnalysisTab(),
-            _buildFlashcardsTab(),
-          ],
-        ),
+        child: _buildAnalysisTab(),
       ),
     );
   }
@@ -276,9 +210,9 @@ class _GeminiAssistantPageState extends State<GeminiAssistantPage>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Sube una imagen de tus apuntes, libreta o pizarrón para detectar tareas y generar flashcards de estudio de forma automática.',
-            style:
-                GoogleFonts.inter(color: Colors.white70, fontSize: 14, height: 1.5),
+            'Sube una imagen de tus apuntes, libreta o pizarrón para detectar tareas de forma automática.',
+            style: GoogleFonts.inter(
+                color: Colors.white70, fontSize: 14, height: 1.5),
           ),
           const SizedBox(height: 20),
 
@@ -293,8 +227,7 @@ class _GeminiAssistantPageState extends State<GeminiAssistantPage>
                   color: _cardBg,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                      color: _gold.withValues(alpha: 0.3),
-                      width: 1.5),
+                      color: _gold.withValues(alpha: 0.3), width: 1.5),
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -358,8 +291,8 @@ class _GeminiAssistantPageState extends State<GeminiAssistantPage>
                   padding: const EdgeInsets.all(8),
                   decoration: const BoxDecoration(
                       color: Colors.black54, shape: BoxShape.circle),
-                  child:
-                      const Icon(Icons.delete, color: Colors.redAccent, size: 20),
+                  child: const Icon(Icons.delete,
+                      color: Colors.redAccent, size: 20),
                 ),
               ),
             ),
@@ -466,176 +399,8 @@ class _GeminiAssistantPageState extends State<GeminiAssistantPage>
                   ],
                 ),
               )),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () => _tabController.animateTo(1),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _gold.withValues(alpha: 0.15),
-                foregroundColor: _gold,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: _gold.withValues(alpha: 0.4)),
-                ),
-              ),
-              child: const Text('Ver Colecciones de Flashcards',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
-          ),
         ],
       ),
-    );
-  }
-
-  // ── Pestaña 2: Flashcards ─────────────────────────────────────────────────
-
-  Widget _buildFlashcardsTab() {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      return const Center(
-          child: CircularProgressIndicator(color: Color(0xFFD4AF37)));
-    }
-
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('flashcard_sets')
-          .orderBy('createdAt', descending: true)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(child: CircularProgressIndicator(color: _gold));
-        }
-        if (snapshot.hasError) {
-          print('[GEMINI_UI] [FIRESTORE_READ_ERROR] Error al leer flashcard sets de Firestore: ${snapshot.error}');
-        }
-
-        final firestoreDocs = snapshot.data?.docs ?? [];
-        
-        // Unificar flashcard sets locales y de Firestore
-        final List<UnifiedFlashcardSet> allSets = [];
-        for (var doc in firestoreDocs) {
-          allSets.add(UnifiedFlashcardSet(id: doc.id, data: doc.data() as Map<String, dynamic>));
-        }
-        for (var localSet in _localFlashcardSets) {
-          allSets.add(UnifiedFlashcardSet(id: localSet['id'].toString(), data: localSet));
-        }
-
-        if (allSets.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.style_outlined,
-                    size: 72, color: _gold.withValues(alpha: 0.4)),
-                const SizedBox(height: 16),
-                Text('No tienes sets de flashcards',
-                    style: GoogleFonts.outfit(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white)),
-                const SizedBox(height: 8),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 40),
-                  child: Text(
-                    'Sube fotos de tus apuntes en "Analizar Apunte" para crearlas automáticamente.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white54),
-                  ),
-                ),
-              ],
-            ),
-          );
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(20),
-          itemCount: allSets.length,
-          itemBuilder: (context, index) {
-            final set = allSets[index];
-            final data = set.data;
-            final title = data['title'] ?? 'Set de Estudio';
-            final materia = data['materia'] ?? 'General';
-            final cards = (data['cards'] as List?) ?? [];
-            final isOffline = data['isOffline'] == true;
-
-            return Container(
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                color: _cardBg,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white12),
-              ),
-              child: ListTile(
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                leading: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: _gold.withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(Icons.style_rounded, color: _gold),
-                ),
-                title: Row(
-                  children: [
-                    Expanded(
-                      child: Text(title,
-                          style: GoogleFonts.outfit(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white)),
-                    ),
-                    if (isOffline) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.amber.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.amber.withOpacity(0.4), width: 1),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.cloud_off, color: Colors.amber, size: 8),
-                            SizedBox(width: 3),
-                            Text(
-                              'LOCAL',
-                              style: TextStyle(color: Colors.amber, fontSize: 8, fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-                subtitle: Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text('Materia: $materia • ${cards.length} tarjetas',
-                      style:
-                          GoogleFonts.inter(fontSize: 12, color: Colors.white54)),
-                ),
-                trailing: const Icon(Icons.chevron_right, color: Colors.white54),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => FlashcardsStudyPage(
-                      setId: set.id,
-                      title: title,
-                      materia: materia,
-                      cards: List<Map<String, dynamic>>.from(cards),
-                    ),
-                  ),
-                ).then((_) => _loadLocalFlashcardSets()),
-              ),
-            );
-          },
-        );
-      },
     );
   }
 }
