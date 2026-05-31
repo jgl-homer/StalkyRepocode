@@ -47,7 +47,7 @@ class AIService {
 
   // ── Punto de entrada público ──────────────────────────────────────────────
 
-  /// Analiza la imagen con Gemini y persiste los resultados en Firestore.
+  /// Analiza la imagen con Gemini y devuelve tareas detectadas para revision.
   /// Usa auto-fallback entre modelos si hay saturación o error temporal.
   Future<Map<String, dynamic>> processNotesImage({
     required Uint8List imageBytes,
@@ -152,7 +152,91 @@ class AIService {
       );
     }
 
-    return _processResponse(response, activeUid);
+    return _processResponse(response);
+  }
+
+  Future<Map<String, dynamic>> saveDetectedTask({
+    required String userId,
+    required String title,
+    required String materia,
+    required String note,
+    required DateTime dueDate,
+  }) async {
+    try {
+      return await _saveTaskToDB(
+        userId: userId,
+        descripcion: title,
+        materia: materia,
+        note: note,
+        dueDate: dueDate,
+      );
+    } catch (dbError) {
+      print(
+          '[ASISTENTE_IA] [FIRESTORE_ERROR] Error al guardar tarea en Firestore: $dbError');
+
+      final localId =
+          'local_task_${DateTime.now().millisecondsSinceEpoch}_${title.hashCode.abs()}';
+      final localTask = {
+        'id': localId,
+        'title': title,
+        'materia': _classifyCategory(materia),
+        'description': note.isNotEmpty
+            ? note
+            : 'Generado por el Asistente IA a partir de apuntes (Local Fallback).',
+        'priority': 'media',
+        'dueDate': dueDate.toIso8601String(),
+        'createdAt': DateTime.now().toIso8601String(),
+        'completed': false,
+        'subtasks': [],
+        'isOffline': true,
+      };
+
+      await saveOfflineTask(userId, localTask);
+      try {
+        if (dueDate.isAfter(DateTime.now())) {
+          await NotificationService().scheduleNotification(
+            localId.hashCode.abs() % 100000,
+            'Recordatorio IA: $title',
+            'Tarea de ${localTask['materia']} detectada en tus apuntes.',
+            dueDate,
+          );
+        }
+      } catch (_) {}
+
+      return {
+        'id': localId,
+        'title': title,
+        'materia': localTask['materia'],
+        'dueDate': dueDate,
+        'isOffline': true,
+      };
+    }
+  }
+
+  Future<Map<String, dynamic>> processVoiceReminder({
+    required String transcript,
+    required String userId,
+  }) async {
+    final parsed = await _parseVoiceReminder(transcript);
+    final dueDate = parsed['dueDate'] as DateTime?;
+
+    if (dueDate == null) {
+      throw Exception(
+        'No detecte fecha y hora claras. Di algo como: "recuérdame entregar matemáticas mañana a las 6 pm".',
+      );
+    }
+
+    if (!dueDate.isAfter(DateTime.now())) {
+      throw Exception('La fecha y hora detectadas estan en el pasado.');
+    }
+
+    return saveDetectedTask(
+      userId: userId,
+      title: parsed['title']?.toString() ?? transcript,
+      materia: parsed['materia']?.toString() ?? 'General',
+      note: parsed['note']?.toString() ?? 'Creado por dictado con IA.',
+      dueDate: dueDate,
+    );
   }
 
   // ── Helpers privados ──────────────────────────────────────────────────────
@@ -194,11 +278,93 @@ class AIService {
     ];
   }
 
+  Future<Map<String, dynamic>> _parseVoiceReminder(String transcript) async {
+    final apiKey = await _loadApiKey();
+    GenerateContentResponse? response;
+    String? lastError;
+    final now = DateTime.now();
+
+    final prompt = '''
+Analiza este dictado de voz y extrae un recordatorio.
+
+Fecha y hora actual local: ${now.toIso8601String()}.
+
+Dictado:
+"$transcript"
+
+Reglas:
+- Devuelve SOLO JSON valido, sin markdown.
+- El JSON debe tener: title, materia, note, dueDateIso.
+- title: accion concreta y breve.
+- materia: una de Escuela, Trabajo, Pagos, Personal o General.
+- note: detalles utiles del dictado o "Creado por dictado con IA.".
+- dueDateIso: fecha y hora completa en ISO 8601 local si el dictado incluye fecha y hora claras.
+- Si falta fecha o falta hora, dueDateIso debe ser null.
+- Resuelve fechas relativas como hoy, mañana, pasado mañana o viernes usando la fecha actual.
+''';
+
+    for (final modelName in _modelFallbacks) {
+      try {
+        final model = GenerativeModel(model: modelName, apiKey: apiKey);
+        response = await model.generateContent([Content.text(prompt)]);
+        break;
+      } catch (e) {
+        lastError = e.toString();
+        final s = lastError.toLowerCase();
+        if (s.contains('503') ||
+            s.contains('unavailable') ||
+            s.contains('demand') ||
+            s.contains('429') ||
+            s.contains('quota') ||
+            s.contains('exhausted') ||
+            s.contains('403') ||
+            s.contains('denied access')) {
+          continue;
+        }
+        rethrow;
+      }
+    }
+
+    if (response == null) {
+      throw Exception('No se pudo analizar el dictado con IA: $lastError');
+    }
+
+    final raw = (response.text ?? '').trim();
+    final jsonText = _extractJsonObject(raw);
+    final decoded = jsonDecode(jsonText) as Map<String, dynamic>;
+    final dueDateText = decoded['dueDateIso']?.toString();
+    final dueDate = dueDateText == null || dueDateText.trim().isEmpty
+        ? null
+        : DateTime.tryParse(dueDateText);
+
+    return {
+      'title': decoded['title']?.toString().trim().isNotEmpty == true
+          ? decoded['title'].toString().trim()
+          : transcript.trim(),
+      'materia': decoded['materia']?.toString() ?? 'General',
+      'note': decoded['note']?.toString() ?? 'Creado por dictado con IA.',
+      'dueDate': dueDate,
+    };
+  }
+
+  String _extractJsonObject(String raw) {
+    final cleaned = raw
+        .replaceAll(RegExp(r'^```json\s*', multiLine: true), '')
+        .replaceAll(RegExp(r'^```\s*', multiLine: true), '')
+        .replaceAll(RegExp(r'\s*```$', multiLine: true), '')
+        .trim();
+    final start = cleaned.indexOf('{');
+    final end = cleaned.lastIndexOf('}');
+    if (start >= 0 && end > start) {
+      return cleaned.substring(start, end + 1);
+    }
+    return cleaned;
+  }
+
   Future<Map<String, dynamic>> _processResponse(
     GenerateContentResponse response,
-    String userId,
   ) async {
-    final List<Map<String, dynamic>> tasksSaved = [];
+    final List<Map<String, dynamic>> tasksDetected = [];
     final List<String> logs = [];
 
     print(
@@ -213,63 +379,25 @@ class AIService {
         final fechaLimiteStr = call.args['fecha_limite']?.toString();
         final materia = call.args['materia']?.toString() ?? 'General';
 
-        try {
-          final taskData = await _saveTaskToDB(
-            userId: userId,
-            descripcion: descripcion,
-            fechaLimiteStr: fechaLimiteStr,
-            materia: materia,
-          );
-          tasksSaved.add(taskData);
-          logs.add(
-              '📝 Tarea guardada: "$descripcion" (${taskData['materia']})');
-        } catch (dbError) {
-          print(
-              '[ASISTENTE_IA] [FIRESTORE_ERROR] Error al guardar tarea en Firestore: $dbError');
-
-          // Crear objeto de fallback local
-          final localId =
-              'local_task_${DateTime.now().millisecondsSinceEpoch}_${descripcion.hashCode.abs()}';
-          final DateTime dueDate = _parseDueDate(fechaLimiteStr);
-          final localTask = {
-            'id': localId,
-            'title': descripcion,
-            'materia': _classifyCategory(materia),
-            'description':
-                'Generado por el Asistente IA a partir de apuntes (Local Fallback).',
-            'priority': 'media',
-            'dueDate': dueDate.toIso8601String(),
-            'createdAt': DateTime.now().toIso8601String(),
-            'completed': false,
-            'subtasks': [],
-            'isOffline': true,
-          };
-
-          await saveOfflineTask(userId, localTask);
-
-          final uiTaskData = {
-            'id': localId,
-            'title': descripcion,
-            'materia': localTask['materia'],
-            'dueDate': dueDate,
-            'isOffline': true,
-          };
-          tasksSaved.add(uiTaskData);
-          logs.add('⚠️ Tarea guardada localmente (Error en la nube: $dbError)');
-        }
+        tasksDetected.add({
+          'title': descripcion,
+          'materia': _classifyCategory(materia),
+          if (fechaLimiteStr != null && fechaLimiteStr.trim().isNotEmpty)
+            'suggestedDueDate': _parseDueDate(fechaLimiteStr),
+        });
+        logs.add('Tarea detectada: "$descripcion"');
       }
     }
 
     final textResponse = response.text ?? '';
-    if (tasksSaved.isEmpty && textResponse.isNotEmpty) {
-      logs.add(
-          'ℹ️ Gemini analizó la imagen pero no detectó una tarea explícita.');
+    if (tasksDetected.isEmpty && textResponse.isNotEmpty) {
+      logs.add('Gemini analizo la imagen pero no detecto una tarea explicita.');
     }
 
     return {
       'success': true,
       'textResponse': textResponse,
-      'tasksSaved': tasksSaved,
+      'tasksDetected': tasksDetected,
       'logs': logs,
     };
   }
@@ -277,11 +405,14 @@ class AIService {
   Future<Map<String, dynamic>> _saveTaskToDB({
     required String userId,
     required String descripcion,
-    required String? fechaLimiteStr,
     required String materia,
+    required String note,
+    required DateTime dueDate,
   }) async {
     final String category = _classifyCategory(materia);
-    final DateTime dueDate = _parseDueDate(fechaLimiteStr);
+    final String description = note.isNotEmpty
+        ? note
+        : 'Generado por el Asistente IA a partir de apuntes.';
 
     print(
         '[ASISTENTE_IA] [FIRESTORE_WRITE] Intentando guardar tarea: "$descripcion" para usuario: $userId');
@@ -293,7 +424,7 @@ class AIService {
         .add({
       'title': descripcion,
       'materia': category,
-      'description': 'Generado por el Asistente IA a partir de apuntes.',
+      'description': description,
       'priority': 'media',
       'dueDate': Timestamp.fromDate(dueDate),
       'createdAt': Timestamp.now(),
@@ -342,12 +473,17 @@ class AIService {
 
   String _classifyCategory(String materia) {
     final m = materia.trim().toLowerCase();
-    if (m.contains('trabajo') || m.contains('oficina') || m.contains('laboral'))
+    if (m.contains('trabajo') ||
+        m.contains('oficina') ||
+        m.contains('laboral')) {
       return 'Trabajo';
-    if (m.contains('pago') || m.contains('tarjeta') || m.contains('dinero'))
+    }
+    if (m.contains('pago') || m.contains('tarjeta') || m.contains('dinero')) {
       return 'Pagos';
-    if (m.contains('personal') || m.contains('casa') || m.contains('salud'))
+    }
+    if (m.contains('personal') || m.contains('casa') || m.contains('salud')) {
       return 'Personal';
+    }
     return 'Escuela'; // Default para materias académicas
   }
 }
