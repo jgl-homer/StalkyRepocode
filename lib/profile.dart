@@ -4,9 +4,15 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'delete_account.dart';
 import 'login.dart';
 import 'services/auth_service.dart';
+import 'services/theme_controller.dart';
 
 class ProfilePage extends StatefulWidget {
-  const ProfilePage({super.key});
+  const ProfilePage({
+    super.key,
+    this.themeTutorialKey,
+  });
+
+  final GlobalKey? themeTutorialKey;
 
   @override
   State<ProfilePage> createState() => _ProfilePageState();
@@ -18,9 +24,12 @@ class _ProfilePageState extends State<ProfilePage> {
   final _firestore = FirebaseFirestore.instance;
   final AuthService _authService = AuthService();
 
-  final Color _bg = const Color(0xFF000000);
-  final Color _gold = const Color(0xFFD4AF37);
-  final Color _cardBg = const Color(0xFF1E1E1E);
+  Color get _bg => Theme.of(context).colorScheme.surface;
+  Color get _gold => Theme.of(context).colorScheme.primary;
+  Color get _cardBg => Theme.of(context).colorScheme.surfaceContainerHighest;
+  Color get _textColor => Theme.of(context).colorScheme.onSurface;
+  Color get _mutedTextColor =>
+      Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.62);
 
   String _initialName = '';
   String _name = '';
@@ -87,8 +96,9 @@ class _ProfilePageState extends State<ProfilePage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: const Text('Contraseña actualizada',
-                  style: TextStyle(color: Colors.black)),
+              content: Text('Contraseña actualizada',
+                  style: TextStyle(
+                      color: Theme.of(context).colorScheme.onPrimary)),
               backgroundColor: _gold),
         );
       }
@@ -136,8 +146,9 @@ class _ProfilePageState extends State<ProfilePage> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: const Text('Perfil actualizado',
-                    style: TextStyle(color: Colors.black)),
+                content: Text('Perfil actualizado',
+                    style: TextStyle(
+                        color: Theme.of(context).colorScheme.onPrimary)),
                 backgroundColor: _gold),
           );
         }
@@ -175,12 +186,13 @@ class _ProfilePageState extends State<ProfilePage> {
   }) {
     return InputDecoration(
       labelText: label,
-      labelStyle: const TextStyle(color: Colors.white70),
+      labelStyle: TextStyle(color: _mutedTextColor),
       helperText: helperText,
-      helperStyle: const TextStyle(color: Colors.white38, fontSize: 12),
+      helperStyle: TextStyle(
+          color: _mutedTextColor.withValues(alpha: 0.7), fontSize: 12),
       filled: true,
       fillColor: _cardBg,
-      prefixIcon: Icon(icon, color: Colors.white54),
+      prefixIcon: Icon(icon, color: _mutedTextColor),
       border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
       focusedBorder: OutlineInputBorder(
@@ -214,13 +226,17 @@ class _ProfilePageState extends State<ProfilePage> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             if (icon != null) ...[
-              Icon(icon, color: textColor ?? Colors.black, size: 20),
+              Icon(
+                icon,
+                color: textColor ?? Theme.of(context).colorScheme.onPrimary,
+                size: 20,
+              ),
               const SizedBox(width: 8),
             ],
             Text(
               text,
               style: TextStyle(
-                  color: textColor ?? Colors.black,
+                  color: textColor ?? Theme.of(context).colorScheme.onPrimary,
                   fontWeight: FontWeight.bold,
                   fontSize: 16),
             ),
@@ -256,8 +272,8 @@ class _ProfilePageState extends State<ProfilePage> {
               ],
               Text(
                 title,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: _textColor,
                   fontSize: 17,
                   fontWeight: FontWeight.bold,
                 ),
@@ -271,13 +287,65 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
+  Widget _buildThemeSelector() {
+    final controller = ThemeControllerScope.of(context);
+    final selected = controller.themeMode;
+    final options = [
+      (ThemeMode.system, 'Sistema', Icons.settings_suggest_outlined),
+      (ThemeMode.light, 'Claro', Icons.light_mode_outlined),
+      (ThemeMode.dark, 'Oscuro', Icons.dark_mode_outlined),
+    ];
+
+    return KeyedSubtree(
+      key: widget.themeTutorialKey,
+      child: _sectionCard(
+        title: 'Tema de la app',
+        icon: Icons.palette_outlined,
+        children: [
+          SegmentedButton<ThemeMode>(
+            segments: [
+              for (final option in options)
+                ButtonSegment<ThemeMode>(
+                  value: option.$1,
+                  label: Text(option.$2),
+                  icon: Icon(option.$3),
+                ),
+            ],
+            selected: {selected},
+            showSelectedIcon: false,
+            onSelectionChanged: (selection) {
+              controller.setThemeMode(selection.first);
+            },
+            style: ButtonStyle(
+              foregroundColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) {
+                  return Theme.of(context).colorScheme.onPrimary;
+                }
+                return _textColor;
+              }),
+              backgroundColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) {
+                  return _gold;
+                }
+                return _bg;
+              }),
+              side: WidgetStatePropertyAll(
+                BorderSide(color: _gold.withValues(alpha: 0.35)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(
-        title: const Text('Ajustes',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: Text('Ajustes',
+            style: TextStyle(color: _textColor, fontWeight: FontWeight.bold)),
         backgroundColor: _bg,
         elevation: 0,
         centerTitle: true,
@@ -328,18 +396,20 @@ class _ProfilePageState extends State<ProfilePage> {
                           const SizedBox(height: 10),
                           Text(
                             _name.isNotEmpty ? _name : 'Usuario',
-                            style: const TextStyle(
-                                color: Colors.white,
+                            style: TextStyle(
+                                color: _textColor,
                                 fontSize: 24,
                                 fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 4),
                           Text(_email,
-                              style: const TextStyle(
-                                  color: Colors.white54, fontSize: 14)),
+                              style: TextStyle(
+                                  color: _mutedTextColor, fontSize: 14)),
                         ],
                       ),
                     ),
+                    const SizedBox(height: 18),
+                    _buildThemeSelector(),
                     const SizedBox(height: 18),
                     Form(
                       key: _formKey,
@@ -352,7 +422,7 @@ class _ProfilePageState extends State<ProfilePage> {
                             children: [
                               TextFormField(
                                 initialValue: _name,
-                                style: const TextStyle(color: Colors.white),
+                                style: TextStyle(color: _textColor),
                                 decoration: _getInputDecoration(
                                   'Nombre',
                                   Icons.person_outline,
@@ -374,17 +444,17 @@ class _ProfilePageState extends State<ProfilePage> {
                             title: 'Cambiar contraseña',
                             icon: Icons.lock_reset_outlined,
                             children: [
-                              const Text(
+                              Text(
                                 'Usa una contraseña segura para proteger tu cuenta',
                                 style: TextStyle(
-                                    color: Colors.white54,
+                                    color: _mutedTextColor,
                                     fontSize: 13,
                                     height: 1.35),
                               ),
                               const SizedBox(height: 14),
                               TextFormField(
                                 controller: _currentPasswordController,
-                                style: const TextStyle(color: Colors.white),
+                                style: TextStyle(color: _textColor),
                                 decoration: _getInputDecoration(
                                     'Contraseña actual', Icons.lock_outline),
                                 obscureText: true,
@@ -400,7 +470,7 @@ class _ProfilePageState extends State<ProfilePage> {
                               const SizedBox(height: 16),
                               TextFormField(
                                 controller: _newPasswordController,
-                                style: const TextStyle(color: Colors.white),
+                                style: TextStyle(color: _textColor),
                                 decoration: _getInputDecoration(
                                     'Nueva contraseña', Icons.vpn_key_outlined),
                                 obscureText: true,
@@ -430,8 +500,8 @@ class _ProfilePageState extends State<ProfilePage> {
                             children: [
                               _buildButton(
                                 text: 'Cerrar sesión',
-                                bgColor: Colors.black,
-                                textColor: Colors.white,
+                                bgColor: _bg,
+                                textColor: _textColor,
                                 icon: Icons.logout,
                                 onPressed: _logout,
                               ),
@@ -446,10 +516,10 @@ class _ProfilePageState extends State<ProfilePage> {
                             backgroundColor:
                                 Colors.redAccent.withValues(alpha: 0.08),
                             children: [
-                              const Text(
+                              Text(
                                 'Eliminar tu cuenta borra tu acceso y tus datos asociados.',
                                 style: TextStyle(
-                                    color: Colors.white60,
+                                    color: _mutedTextColor,
                                     fontSize: 13,
                                     height: 1.35),
                               ),

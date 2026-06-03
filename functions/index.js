@@ -2,6 +2,8 @@
 
 // 1. 🚀 NUEVAS IMPORTACIONES REQUERIDAS
 const { setGlobalOptions } = require("firebase-functions");
+const { onRequest } = require("firebase-functions/v2/https");
+const { defineSecret } = require("firebase-functions/params");
 const admin = require('firebase-admin'); // Importar el SDK de Admin
 const { onSchedule } = require("firebase-functions/v2/scheduler"); // Importar el trigger de programador (scheduler)
 
@@ -10,6 +12,177 @@ admin.initializeApp();
 
 // Para cost control, puedes establecer opciones globales.
 setGlobalOptions({ maxInstances: 10 });
+
+const geminiApiKey = defineSecret("GEMINI_API_KEY");
+
+async function verifyFirebaseUser(request) {
+    const header = request.get("authorization") || "";
+    const match = header.match(/^Bearer (.+)$/);
+    if (!match) {
+        throw new Error("missing-auth-token");
+    }
+    return admin.auth().verifyIdToken(match[1]);
+}
+
+function sendCors(response) {
+    response.set("Access-Control-Allow-Origin", "*");
+    response.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    response.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+}
+
+async function callGemini({ apiKey, body }) {
+    const models = [
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-2.0-flash",
+        "gemini-flash-latest",
+    ];
+    let lastError = "";
+
+    for (const model of models) {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const geminiResponse = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        });
+        const text = await geminiResponse.text();
+
+        if (geminiResponse.ok) {
+            return JSON.parse(text);
+        }
+
+        lastError = `${geminiResponse.status}: ${text}`;
+        if (![403, 429, 503].includes(geminiResponse.status)) {
+            break;
+        }
+    }
+
+    throw new Error(lastError || "Gemini request failed");
+}
+
+function extractJsonObject(text) {
+    const cleaned = String(text || "")
+        .replace(/^```json\s*/gm, "")
+        .replace(/^```\s*/gm, "")
+        .replace(/\s*```$/gm, "")
+        .trim();
+    const start = cleaned.indexOf("{");
+    const end = cleaned.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+        return cleaned.slice(start, end + 1);
+    }
+    return cleaned;
+}
+
+function geminiText(response) {
+    return response?.candidates?.[0]?.content?.parts
+        ?.map((part) => part.text || "")
+        .join("")
+        .trim() || "";
+}
+
+exports.analyzeNotesWithGemini = onRequest({ secrets: [geminiApiKey] }, async (request, response) => {
+    sendCors(response);
+    if (request.method === "OPTIONS") {
+        response.status(204).send("");
+        return;
+    }
+    if (request.method !== "POST") {
+        response.status(405).json({ error: "method-not-allowed" });
+        return;
+    }
+
+    try {
+        await verifyFirebaseUser(request);
+        const imageBase64 = request.body?.imageBase64;
+        if (!imageBase64 || typeof imageBase64 !== "string") {
+            response.status(400).json({ error: "missing-image" });
+            return;
+        }
+
+        const geminiResponse = await callGemini({
+            apiKey: geminiApiKey.value(),
+            body: {
+                contents: [{
+                    role: "user",
+                    parts: [
+                        {
+                            text:
+                                "Analiza la imagen de una pizarra, libreta o apunte. " +
+                                "Detecta tareas, actividades o proyectos pendientes. " +
+                                "Devuelve SOLO JSON valido con esta forma: " +
+                                "{\"tasksDetected\":[{\"title\":\"...\",\"materia\":\"Escuela|Trabajo|Pagos|Personal|General\"}],\"logs\":[\"...\"]}. " +
+                                "Si no hay tareas, usa tasksDetected vacio y explica brevemente en logs.",
+                        },
+                        {
+                            inline_data: {
+                                mime_type: request.body?.mimeType || "image/jpeg",
+                                data: imageBase64,
+                            },
+                        },
+                    ],
+                }],
+            },
+        });
+
+        const parsed = JSON.parse(extractJsonObject(geminiText(geminiResponse)));
+        response.json({
+            success: true,
+            textResponse: "",
+            tasksDetected: Array.isArray(parsed.tasksDetected) ? parsed.tasksDetected : [],
+            logs: Array.isArray(parsed.logs) ? parsed.logs : [],
+        });
+    } catch (error) {
+        console.error("analyzeNotesWithGemini failed", error);
+        response.status(500).json({ error: "gemini-analysis-failed" });
+    }
+});
+
+exports.parseVoiceReminderWithGemini = onRequest({ secrets: [geminiApiKey] }, async (request, response) => {
+    sendCors(response);
+    if (request.method === "OPTIONS") {
+        response.status(204).send("");
+        return;
+    }
+    if (request.method !== "POST") {
+        response.status(405).json({ error: "method-not-allowed" });
+        return;
+    }
+
+    try {
+        await verifyFirebaseUser(request);
+        const transcript = String(request.body?.transcript || "").trim();
+        const nowIso = String(request.body?.nowIso || new Date().toISOString());
+        if (!transcript) {
+            response.status(400).json({ error: "missing-transcript" });
+            return;
+        }
+
+        const geminiResponse = await callGemini({
+            apiKey: geminiApiKey.value(),
+            body: {
+                contents: [{
+                    role: "user",
+                    parts: [{
+                        text:
+                            `Fecha y hora actual local: ${nowIso}.\n` +
+                            `Dictado: "${transcript}"\n\n` +
+                            "Devuelve SOLO JSON valido con: title, materia, note, dueDateIso. " +
+                            "materia debe ser Escuela, Trabajo, Pagos, Personal o General. " +
+                            "Si falta fecha u hora clara, dueDateIso debe ser null. " +
+                            "Resuelve fechas relativas usando la fecha actual.",
+                    }],
+                }],
+            },
+        });
+
+        response.json(JSON.parse(extractJsonObject(geminiText(geminiResponse))));
+    } catch (error) {
+        console.error("parseVoiceReminderWithGemini failed", error);
+        response.status(500).json({ error: "gemini-voice-parse-failed" });
+    }
+});
 
 /**
  * 🔔 FUNCIÓN CLOUD: scheduleTaskReminders

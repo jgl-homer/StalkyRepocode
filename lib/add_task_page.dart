@@ -21,6 +21,7 @@ class _AddTaskPageState extends State<AddTaskPage> {
   final Color _cardBg = const Color(0xFF1E1E1E);
 
   String _selectedCategory = 'Trabajo';
+  ReminderLevel _selectedReminderLevel = ReminderLevel.normal;
   final List<String> _categories = [
     'Escuela',
     'Trabajo',
@@ -147,6 +148,7 @@ class _AddTaskPageState extends State<AddTaskPage> {
       'dueDate': Timestamp.fromDate(finalDueDate),
       'createdAt': Timestamp.now(),
       'completed': false,
+      'reminderLevel': _selectedReminderLevel.firestoreValue,
       'subtasks':
           [], // Subtasks hidden for simpler STAKLY flow, but kept in DB struct
     };
@@ -160,11 +162,12 @@ class _AddTaskPageState extends State<AddTaskPage> {
 
       // Notification scheduling
       if (finalDueDate.isAfter(DateTime.now())) {
-        await _notificationService.scheduleNotification(
-          docRef.id.hashCode.abs() % 100000,
-          'Recordatorio: $title',
-          '¡Es hora de completar tu tarea!',
-          finalDueDate,
+        await _notificationService.scheduleTaskReminders(
+          userId: user.uid,
+          taskId: docRef.id,
+          title: title,
+          dueDate: finalDueDate,
+          level: _selectedReminderLevel,
         );
       }
 
@@ -290,6 +293,66 @@ class _AddTaskPageState extends State<AddTaskPage> {
               onTap: _selectTime,
               cardBg: _cardBg,
               gold: _gold,
+            ),
+            const SizedBox(height: 30),
+
+            const Text('Tipo de recordatorio',
+                style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600)),
+            const SizedBox(height: 10),
+            Column(
+              children: ReminderLevel.values.map((level) {
+                final isSelected = _selectedReminderLevel == level;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: InkWell(
+                    onTap: () => setState(() => _selectedReminderLevel = level),
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? _gold.withValues(alpha: 0.14)
+                            : _cardBg,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isSelected
+                              ? _gold
+                              : _gold.withValues(alpha: 0.25),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            isSelected
+                                ? Icons.notifications_active
+                                : Icons.notifications_none,
+                            color: _gold,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              level.label,
+                              style: TextStyle(
+                                color:
+                                    isSelected ? Colors.white : Colors.white70,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
             ),
             const SizedBox(height: 30),
 

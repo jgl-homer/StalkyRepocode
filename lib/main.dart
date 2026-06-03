@@ -17,11 +17,12 @@ import 'firebase_options.dart';
 import 'login.dart';
 import 'dashboard.dart';
 import 'services/notification_service.dart';
+import 'services/theme_controller.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  print("Handling a background message: ${message.messageId}");
+  debugPrint("Handling a background message: ${message.messageId}");
 }
 
 Future<void> main() async {
@@ -50,8 +51,8 @@ Future<void> main() async {
 
   // 🔒 4. INICIALIZACIÓN DE APP CHECK (debug para desarrollo/emulador)
   await FirebaseAppCheck.instance.activate(
-    androidProvider: AndroidProvider.debug,
-    webProvider: ReCaptchaV3Provider(
+    providerAndroid: const AndroidDebugProvider(),
+    providerWeb: ReCaptchaV3Provider(
       '6Lc1H_UrAAAAANltWq-pY11iXLcm83744gdTrbVn',
     ),
   );
@@ -66,11 +67,13 @@ Future<void> main() async {
   // 🚀 5. Inicializar el Servicio de Notificaciones (para notificaciones locales)
   final notificationService = NotificationService(); // Almacenar la instancia
   await notificationService.initNotifications();
+  final themeController = ThemeController();
+  await themeController.loadThemeMode();
 
   // 🔔 7. CONFIGURAR LISTENERS DE MENSAJES EN PRIMER PLANO (Foreground)
   FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-    print('Got a message whilst in the foreground!');
-    print('Message data: ${message.data}');
+    debugPrint('Got a message whilst in the foreground!');
+    debugPrint('Message data: ${message.data}');
 
     if (message.notification != null) {
       NotificationService().showNotification(
@@ -84,66 +87,134 @@ Future<void> main() async {
 
   runApp(
     kReleaseMode
-        ? const MyApp()
+        ? MyApp(themeController: themeController)
         : DevicePreview(
             enabled: true,
-            builder: (context) => const MyApp(),
+            builder: (context) => MyApp(themeController: themeController),
           ),
   );
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const MyApp({super.key, required this.themeController});
+
+  final ThemeController themeController;
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Stalky',
-      debugShowCheckedModeBanner: false,
-      locale: kReleaseMode ? null : DevicePreview.locale(context),
-      builder: kReleaseMode ? null : DevicePreview.appBuilder,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: Colors.black,
-        primaryColor: const Color(0xFFD4AF37),
-        colorScheme: const ColorScheme.dark(
-          primary: Color(0xFFD4AF37),
-          background: Color(0xFF000000),
+    return ThemeControllerScope(
+      controller: themeController,
+      child: AnimatedBuilder(
+        animation: themeController,
+        builder: (context, _) {
+          return MaterialApp(
+            title: 'Stalky',
+            debugShowCheckedModeBanner: false,
+            locale: kReleaseMode ? null : DevicePreview.locale(context),
+            builder: kReleaseMode ? null : DevicePreview.appBuilder,
+            theme: _buildTheme(Brightness.light),
+            darkTheme: _buildTheme(Brightness.dark),
+            themeMode: themeController.themeMode,
+            home: StreamBuilder<User?>(
+              stream: FirebaseAuth.instance.authStateChanges(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Scaffold(
+                    body: Center(child: CircularProgressIndicator()),
+                  );
+                }
+
+                if (snapshot.hasData && snapshot.data?.isAnonymous == false) {
+                  return const DashboardPage();
+                }
+
+                return const LoginPage();
+              },
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  ThemeData _buildTheme(Brightness brightness) {
+    const gold = Color(0xFFD4AF37);
+    final isDark = brightness == Brightness.dark;
+    final scheme = ColorScheme.fromSeed(
+      seedColor: gold,
+      brightness: brightness,
+    ).copyWith(
+      primary: gold,
+      onPrimary: Colors.black,
+      surface: isDark ? const Color(0xFF000000) : const Color(0xFFF8F7FB),
+      onSurface: isDark ? Colors.white : const Color(0xFF111111),
+      surfaceContainerHighest:
+          isDark ? const Color(0xFF1E1E1E) : const Color(0xFFFFFFFF),
+      outline: isDark ? const Color(0xFF3A3A3A) : const Color(0xFFE5E1EA),
+      error: Colors.redAccent,
+    );
+    final base = ThemeData(
+      brightness: brightness,
+      colorScheme: scheme,
+      scaffoldBackgroundColor: scheme.surface,
+      primaryColor: gold,
+      useMaterial3: true,
+      textTheme: GoogleFonts.interTextTheme(
+        isDark ? ThemeData.dark().textTheme : ThemeData.light().textTheme,
+      ).apply(
+        bodyColor: scheme.onSurface,
+        displayColor: scheme.onSurface,
+      ),
+    );
+
+    return base.copyWith(
+      appBarTheme: AppBarTheme(
+        backgroundColor: scheme.surface,
+        foregroundColor: scheme.onSurface,
+        elevation: 0,
+        centerTitle: true,
+      ),
+      bottomNavigationBarTheme: BottomNavigationBarThemeData(
+        backgroundColor: scheme.surface,
+        selectedItemColor: scheme.primary,
+        unselectedItemColor:
+            isDark ? Colors.grey.shade600 : Colors.grey.shade500,
+        type: BottomNavigationBarType.fixed,
+      ),
+      cardColor: scheme.surfaceContainerHighest,
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: scheme.surfaceContainerHighest,
+        labelStyle: TextStyle(color: scheme.onSurface.withValues(alpha: 0.7)),
+        helperStyle: TextStyle(color: scheme.onSurface.withValues(alpha: 0.45)),
+        prefixIconColor: scheme.onSurface.withValues(alpha: 0.55),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
         ),
-        textTheme: GoogleFonts.interTextTheme(
-          ThemeData.dark().textTheme,
-        ).apply(
-          bodyColor: Colors.white,
-          displayColor: Colors.white,
-        ),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF000000),
-          elevation: 0,
-          centerTitle: true,
-        ),
-        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-          backgroundColor: Color(0xFF000000),
-          selectedItemColor: Color(0xFFD4AF37),
-          unselectedItemColor: Colors.grey,
-          type: BottomNavigationBarType.fixed,
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: scheme.primary, width: 2),
         ),
       ),
-      home: StreamBuilder<User?>(
-        stream: FirebaseAuth.instance.authStateChanges(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Scaffold(
-              body: Center(
-                  child: CircularProgressIndicator(color: Color(0xFFD4AF37))),
-            );
-          }
-
-          if (snapshot.hasData && snapshot.data?.isAnonymous == false) {
-            return const DashboardPage();
-          }
-
-          return const LoginPage();
-        },
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: scheme.primary,
+          foregroundColor: scheme.onPrimary,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          elevation: 0,
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: scheme.primary,
+          foregroundColor: scheme.onPrimary,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
       ),
     );
   }

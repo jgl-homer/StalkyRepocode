@@ -30,6 +30,7 @@ dependencies:
   timezone: ^0.10.1 
   firebase_app_check: ^0.4.1+1
   intl: ^0.20.2 # Necesario para el formato de fecha/hora en dashboard.dart
+  http: ^1.2.2
   flutter_rating_bar: ^4.0.1
   diacritic: ^0.1.6
   audioplayers: ^6.5.1
@@ -40,7 +41,6 @@ dependencies:
   # Gemini and MCP Integration
   dart_mcp: 0.5.1
   stream_channel: ^2.1.2
-  google_generative_ai: ^0.4.6
   speech_to_text: ^7.4.0
   google_sign_in: ^7.2.0
   flutter_timezone: ^5.1.0
@@ -57,9 +57,10 @@ flutter:
   # 🖼️ SECCIÓN DE ASSETS: DESCOMENTADA Y CONFIGURADA
   # Esta línea es CLAVE para que Flutter encuentre tu logo en dashboard.dart
   assets:
-    - secrets.json
     - assets/logo/
     - assets/sounds/
+    - assets/stalky/
+    - assets/.stalky/
 
 flutter_launcher_icons:
   android: true

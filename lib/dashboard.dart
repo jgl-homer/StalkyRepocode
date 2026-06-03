@@ -5,14 +5,18 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 
-import 'add_task_page.dart' as addPage;
-import 'edit_task_page.dart' as editPage;
+import 'add_task_page.dart' as add_page;
+import 'edit_task_page.dart' as edit_page;
 import 'profile.dart';
 import 'agenda_page.dart';
 import 'stats_page.dart';
 import 'pomodoro_page.dart';
 import 'gemini_assistant_page.dart';
 import 'services/ai_service.dart';
+import 'services/notification_service.dart';
+import 'tutorial/tutorial_controller.dart';
+import 'tutorial/tutorial_overlay.dart';
+import 'tutorial/tutorial_step.dart';
 import 'widgets/voice_dictation_button.dart';
 
 class UnifiedTask {
@@ -33,24 +37,185 @@ class _DashboardPageState extends State<DashboardPage> {
   List<Map<String, dynamic>> _localTasks = [];
   final TextEditingController _voiceController = TextEditingController();
   final AIService _aiService = AIService();
+  final GlobalKey _scanNotesKey = GlobalKey();
+  final GlobalKey _microphoneFabKey = GlobalKey();
+  final GlobalKey _addTaskFabKey = GlobalKey();
+  final GlobalKey _bottomNavigationKey = GlobalKey();
+  final GlobalKey _agendaCalendarKey = GlobalKey();
+  final GlobalKey _agendaEventsKey = GlobalKey();
+  final GlobalKey _statsSummaryKey = GlobalKey();
+  final GlobalKey _statsKpiKey = GlobalKey();
+  final GlobalKey _settingsThemeKey = GlobalKey();
+  late final TutorialController _tutorialController;
   bool _isVoiceListening = false;
   bool _isAiVoiceSaving = false;
 
-  // Colors
-  final Color _bg = const Color(0xFF000000);
-  final Color _gold = const Color(0xFFD4AF37);
-  final Color _cardBg = const Color(0xFF1E1E1E);
+  Color get _bg => Theme.of(context).colorScheme.surface;
+  Color get _gold => Theme.of(context).colorScheme.primary;
+  Color get _cardBg => Theme.of(context).colorScheme.surfaceContainerHighest;
+  Color get _textColor => Theme.of(context).colorScheme.onSurface;
+  Color get _mutedTextColor =>
+      Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.62);
 
   @override
   void initState() {
     super.initState();
+    _tutorialController = TutorialController(steps: _buildTutorialSteps());
+    _tutorialController.addListener(_syncTutorialTab);
     _loadLocalTasks();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future<void>.delayed(const Duration(milliseconds: 650), () {
+        if (mounted) {
+          _tutorialController.startTutorialIfNeeded();
+        }
+      });
+    });
   }
 
   @override
   void dispose() {
+    _tutorialController.removeListener(_syncTutorialTab);
+    _tutorialController.dispose();
     _voiceController.dispose();
     super.dispose();
+  }
+
+  List<TutorialStep> _buildTutorialSteps() {
+    return [
+      const TutorialStep(
+        id: 'welcome',
+        title: 'Bienvenida',
+        description:
+            'Hola, soy Stalky. Te acompañaré en un recorrido rápido para que sepas dónde está cada función importante.',
+        targetKey: null,
+        spriteAsset: 'assets/stalky/stalky_welcome.png',
+        stepNumber: 1,
+        tabIndex: 0,
+      ),
+      TutorialStep(
+        id: 'scan_notes',
+        title: 'Escanea tus Apuntes',
+        description:
+            'Escanea tus apuntes o pizarrones y yo detectaré automáticamente tareas, fechas y actividades importantes.',
+        targetKey: _scanNotesKey,
+        spriteAsset: 'assets/stalky/stalky_thinking.png',
+        stepNumber: 2,
+        tabIndex: 0,
+      ),
+      TutorialStep(
+        id: 'voice_button',
+        title: 'Botón de micrófono',
+        description:
+            'Usa dictado por voz para crear tareas rápidamente sin escribir.',
+        targetKey: _microphoneFabKey,
+        spriteAsset: 'assets/stalky/stalky_reminder.png',
+        stepNumber: 3,
+        tabIndex: 0,
+      ),
+      TutorialStep(
+        id: 'add_button',
+        title: 'Botón +',
+        description: 'Pulsa aquí para crear una nueva tarea manualmente.',
+        targetKey: _addTaskFabKey,
+        spriteAsset: 'assets/stalky/stalky_pointing.png',
+        stepNumber: 4,
+        tabIndex: 0,
+      ),
+      TutorialStep(
+        id: 'bottom_navigation',
+        title: 'Navegación',
+        description:
+            'Desde aquí puedes moverte entre Inicio, Agenda, Estadísticas y Ajustes.',
+        targetKey: _bottomNavigationKey,
+        spriteAsset: 'assets/stalky/stalky_pointing.png',
+        stepNumber: 5,
+      ),
+      TutorialStep(
+        id: 'agenda_calendar',
+        title: 'Agenda',
+        description:
+            'Aquí ves tu calendario. Los días marcados te ayudan a ubicar tareas y actividades por fecha.',
+        targetKey: _agendaCalendarKey,
+        spriteAsset: 'assets/stalky/stalky_reminder.png',
+        stepNumber: 6,
+        tabIndex: 1,
+      ),
+      TutorialStep(
+        id: 'agenda_events',
+        title: 'Eventos del día',
+        description:
+            'En esta zona aparecen las tareas programadas para el día que selecciones en el calendario.',
+        targetKey: _agendaEventsKey,
+        spriteAsset: 'assets/stalky/stalky_pointing.png',
+        stepNumber: 7,
+        tabIndex: 1,
+      ),
+      TutorialStep(
+        id: 'stats_summary',
+        title: 'Estadísticas',
+        description:
+            'Aquí revisas tu avance general y tu productividad para saber cómo vas con tus tareas.',
+        targetKey: _statsSummaryKey,
+        spriteAsset: 'assets/stalky/stalky_analyzing.png',
+        stepNumber: 8,
+        tabIndex: 2,
+      ),
+      TutorialStep(
+        id: 'stats_kpis',
+        title: 'Indicadores rápidos',
+        description:
+            'Estos números resumen tus tareas totales, completadas, pendientes y productividad.',
+        targetKey: _statsKpiKey,
+        spriteAsset: 'assets/stalky/stalky_analyzing.png',
+        stepNumber: 9,
+        tabIndex: 2,
+      ),
+      TutorialStep(
+        id: 'settings_theme',
+        title: 'Ajustes',
+        description:
+            'Desde aquí puedes cambiar el tema de la app entre Sistema, Claro y Oscuro.',
+        targetKey: _settingsThemeKey,
+        spriteAsset: 'assets/stalky/stalky_thinking.png',
+        stepNumber: 10,
+        tabIndex: 3,
+      ),
+      const TutorialStep(
+        id: 'success',
+        title: 'Listo',
+        description:
+            '¡Perfecto! Ya conoces las funciones principales de Stalky. Ahora estás listo para comenzar.',
+        targetKey: null,
+        spriteAsset: 'assets/stalky/stalky_success.png',
+        stepNumber: 11,
+        tabIndex: 0,
+      ),
+    ];
+  }
+
+  void _syncTutorialTab() {
+    final targetTab = _tutorialController.currentStep?.tabIndex;
+    if (!_tutorialController.isActive ||
+        targetTab == null ||
+        targetTab == _selectedIndex) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || targetTab == _selectedIndex) return;
+      setState(() => _selectedIndex = targetTab);
+    });
+  }
+
+  void _startManualTutorial() {
+    if (_selectedIndex != 0) {
+      setState(() => _selectedIndex = 0);
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _tutorialController.startTutorial();
+      }
+    });
   }
 
   Future<void> _loadLocalTasks() async {
@@ -69,7 +234,7 @@ class _DashboardPageState extends State<DashboardPage> {
         });
       }
     } catch (e) {
-      print('Error al cargar tareas locales: $e');
+      debugPrint('Error al cargar tareas locales: $e');
     }
   }
 
@@ -91,8 +256,9 @@ class _DashboardPageState extends State<DashboardPage> {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: const Text('Tarea local eliminada con éxito',
-                  style: TextStyle(color: Colors.black)),
+              content: Text('Tarea local eliminada con éxito',
+                  style: TextStyle(
+                      color: Theme.of(context).colorScheme.onPrimary)),
               backgroundColor: _gold),
         );
       } catch (e) {
@@ -104,6 +270,7 @@ class _DashboardPageState extends State<DashboardPage> {
     }
 
     try {
+      await NotificationService().cancelTaskNotifications(docId);
       await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -113,8 +280,9 @@ class _DashboardPageState extends State<DashboardPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: const Text('Tarea eliminada con éxito',
-                style: TextStyle(color: Colors.black)),
+            content: Text('Tarea eliminada con éxito',
+                style:
+                    TextStyle(color: Theme.of(context).colorScheme.onPrimary)),
             backgroundColor: _gold),
       );
     } catch (e) {
@@ -137,7 +305,7 @@ class _DashboardPageState extends State<DashboardPage> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => editPage.EditTaskPage(
+        builder: (context) => edit_page.EditTaskPage(
           taskId: docId,
           initialData: currentTaskData,
         ),
@@ -162,6 +330,9 @@ class _DashboardPageState extends State<DashboardPage> {
           return jsonEncode(map);
         }).toList();
         await prefs.setStringList(key, updatedList);
+        if (!currentStatus) {
+          await NotificationService().cancelTaskNotifications(docId);
+        }
         await _loadLocalTasks();
       } catch (e) {
         if (!mounted) return;
@@ -172,12 +343,27 @@ class _DashboardPageState extends State<DashboardPage> {
     }
 
     try {
-      await FirebaseFirestore.instance
+      final taskRef = FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .collection('tasks')
-          .doc(docId)
-          .update({'completed': !currentStatus});
+          .doc(docId);
+      final nextStatus = !currentStatus;
+      await taskRef.update({'completed': nextStatus});
+
+      if (nextStatus) {
+        await NotificationService().cancelTaskNotifications(docId);
+      } else {
+        final snapshot = await taskRef.get();
+        final task = snapshot.data();
+        if (task != null) {
+          await NotificationService().rescheduleTaskReminderFromData(
+            userId: user.uid,
+            taskId: docId,
+            task: task,
+          );
+        }
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -197,7 +383,10 @@ class _DashboardPageState extends State<DashboardPage> {
   void _showGoldSnack(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message, style: const TextStyle(color: Colors.black)),
+        content: Text(
+          message,
+          style: TextStyle(color: Theme.of(context).colorScheme.onPrimary),
+        ),
         backgroundColor: _gold,
       ),
     );
@@ -288,11 +477,11 @@ class _DashboardPageState extends State<DashboardPage> {
                         child: Icon(Icons.auto_awesome, color: _gold),
                       ),
                       const SizedBox(width: 12),
-                      const Expanded(
+                      Expanded(
                         child: Text(
                           'Dictado con IA',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: _textColor,
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
@@ -301,7 +490,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       VoiceDictationButton(
                         controller: _voiceController,
                         gold: _gold,
-                        backgroundColor: Colors.black,
+                        backgroundColor: _bg,
                         tooltip: 'Dictar recordatorio',
                         onTextChanged: (_) => setSheetState(() {}),
                         onListeningChanged: (listening) {
@@ -315,17 +504,17 @@ class _DashboardPageState extends State<DashboardPage> {
                   TextField(
                     controller: _voiceController,
                     enabled: !_isAiVoiceSaving,
-                    style: const TextStyle(color: Colors.white),
+                    style: TextStyle(color: _textColor),
                     minLines: 3,
                     maxLines: 5,
                     decoration: InputDecoration(
                       hintText:
                           'Ej. Recuerdame entregar historia mañana a las 6 pm',
                       hintStyle: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.35),
+                        color: _mutedTextColor.withValues(alpha: 0.6),
                       ),
                       filled: true,
-                      fillColor: Colors.black,
+                      fillColor: _bg,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
                         borderSide: BorderSide.none,
@@ -346,23 +535,24 @@ class _DashboardPageState extends State<DashboardPage> {
                           : () =>
                               _saveVoiceReminder(setSheetState, sheetContext),
                       icon: _isAiVoiceSaving
-                          ? const SizedBox(
+                          ? SizedBox(
                               width: 18,
                               height: 18,
                               child: CircularProgressIndicator(
-                                color: Colors.black,
+                                color: Theme.of(context).colorScheme.onPrimary,
                                 strokeWidth: 2,
                               ),
                             )
-                          : const Icon(Icons.bolt, color: Colors.black),
+                          : Icon(Icons.bolt,
+                              color: Theme.of(context).colorScheme.onPrimary),
                       label: Text(
                         _isVoiceListening
                             ? 'Escuchando...'
                             : _isAiVoiceSaving
                                 ? 'Creando...'
                                 : 'Guardar automatico con IA',
-                        style: const TextStyle(
-                          color: Colors.black,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onPrimary,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -398,29 +588,22 @@ class _DashboardPageState extends State<DashboardPage> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(Icons.check_circle_outline,
-              size: 80, color: _gold.withOpacity(0.5)),
+              size: 80, color: _gold.withValues(alpha: 0.5)),
           const SizedBox(height: 20),
-          const Text(
+          Text(
             'Todo al día',
             style: TextStyle(
-                color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                color: _textColor, fontSize: 20, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 10),
-          const Text(
+          Text(
             'No tienes tareas pendientes.\n¡Disfruta tu tiempo libre!',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white54),
+            style: TextStyle(color: _mutedTextColor),
           ),
         ],
       ),
     );
-  }
-
-  bool _isToday(DateTime date) {
-    final now = DateTime.now();
-    return date.year == now.year &&
-        date.month == now.month &&
-        date.day == now.day;
   }
 
   bool _isPastOrToday(DateTime date) {
@@ -434,88 +617,110 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      return const Scaffold(
+      return Scaffold(
           body: Center(
               child: Text('Usuario no autenticado',
-                  style: TextStyle(color: Colors.white))));
+                  style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface))));
     }
 
     final screens = [
       _buildHomePage(user),
-      const AgendaPage(),
-      const StatsPage(),
-      const ProfilePage()
+      AgendaPage(
+        calendarTutorialKey: _agendaCalendarKey,
+        eventsTutorialKey: _agendaEventsKey,
+      ),
+      StatsPage(
+        summaryTutorialKey: _statsSummaryKey,
+        kpiTutorialKey: _statsKpiKey,
+      ),
+      ProfilePage(themeTutorialKey: _settingsThemeKey),
     ];
 
-    return Scaffold(
-      backgroundColor: _bg,
-      body: SafeArea(child: screens[_selectedIndex]),
-      floatingActionButton: _selectedIndex == 0
-          ? Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                FloatingActionButton.small(
-                  heroTag: 'voice_reminder_fab',
-                  onPressed: _openVoiceReminderSheet,
-                  backgroundColor: _cardBg,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    side: BorderSide(color: _gold.withValues(alpha: 0.65)),
-                  ),
-                  child: Icon(Icons.mic_none_rounded, color: _gold),
-                ),
-                const SizedBox(height: 12),
-                FloatingActionButton(
-                  heroTag: 'add_task_fab',
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (context) => const addPage.AddTaskPage()),
-                    ).then((_) => setState(() {}));
-                  },
-                  backgroundColor: _gold,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16)),
-                  child: const Icon(Icons.add, color: Colors.black, size: 32),
-                ),
-              ],
-            )
-          : null,
-      bottomNavigationBar: Theme(
-        data: Theme.of(context).copyWith(
-          splashColor: Colors.transparent,
-          highlightColor: Colors.transparent,
-        ),
-        child: BottomNavigationBar(
+    return Stack(
+      children: [
+        Scaffold(
           backgroundColor: _bg,
-          selectedItemColor: _gold,
-          unselectedItemColor: Colors.grey.shade600,
-          showSelectedLabels: true,
-          showUnselectedLabels: true,
-          type: BottomNavigationBarType.fixed,
-          currentIndex: _selectedIndex,
-          onTap: (index) => setState(() => _selectedIndex = index),
-          items: const [
-            BottomNavigationBarItem(
-                icon: Icon(Icons.home_outlined),
-                activeIcon: Icon(Icons.home),
-                label: 'Inicio'),
-            BottomNavigationBarItem(
-                icon: Icon(Icons.calendar_today_outlined),
-                activeIcon: Icon(Icons.calendar_today),
-                label: 'Agenda'),
-            BottomNavigationBarItem(
-                icon: Icon(Icons.bar_chart_outlined),
-                activeIcon: Icon(Icons.bar_chart),
-                label: 'Stats'),
-            BottomNavigationBarItem(
-                icon: Icon(Icons.person_outline),
-                activeIcon: Icon(Icons.person),
-                label: 'Ajustes'),
-          ],
+          body: SafeArea(child: screens[_selectedIndex]),
+          floatingActionButton: _selectedIndex == 0
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    FloatingActionButton.small(
+                      key: _microphoneFabKey,
+                      heroTag: 'voice_reminder_fab',
+                      onPressed: _openVoiceReminderSheet,
+                      backgroundColor: _cardBg,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: BorderSide(color: _gold.withValues(alpha: 0.65)),
+                      ),
+                      child: Icon(Icons.mic_none_rounded, color: _gold),
+                    ),
+                    const SizedBox(height: 12),
+                    FloatingActionButton(
+                      key: _addTaskFabKey,
+                      heroTag: 'add_task_fab',
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) =>
+                                  const add_page.AddTaskPage()),
+                        ).then((_) => setState(() {}));
+                      },
+                      backgroundColor: _gold,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16)),
+                      child: Icon(
+                        Icons.add,
+                        color: Theme.of(context).colorScheme.onPrimary,
+                        size: 32,
+                      ),
+                    ),
+                  ],
+                )
+              : null,
+          bottomNavigationBar: Container(
+            key: _bottomNavigationKey,
+            child: Theme(
+              data: Theme.of(context).copyWith(
+                splashColor: Colors.transparent,
+                highlightColor: Colors.transparent,
+              ),
+              child: BottomNavigationBar(
+                backgroundColor: _bg,
+                selectedItemColor: _gold,
+                unselectedItemColor: _mutedTextColor,
+                showSelectedLabels: true,
+                showUnselectedLabels: true,
+                type: BottomNavigationBarType.fixed,
+                currentIndex: _selectedIndex,
+                onTap: (index) => setState(() => _selectedIndex = index),
+                items: const [
+                  BottomNavigationBarItem(
+                      icon: Icon(Icons.home_outlined),
+                      activeIcon: Icon(Icons.home),
+                      label: 'Inicio'),
+                  BottomNavigationBarItem(
+                      icon: Icon(Icons.calendar_today_outlined),
+                      activeIcon: Icon(Icons.calendar_today),
+                      label: 'Agenda'),
+                  BottomNavigationBarItem(
+                      icon: Icon(Icons.bar_chart_outlined),
+                      activeIcon: Icon(Icons.bar_chart),
+                      label: 'Stats'),
+                  BottomNavigationBarItem(
+                      icon: Icon(Icons.person_outline),
+                      activeIcon: Icon(Icons.person),
+                      label: 'Ajustes'),
+                ],
+              ),
+            ),
+          ),
         ),
-      ),
+        TutorialOverlay(controller: _tutorialController),
+      ],
     );
   }
 
@@ -535,7 +740,7 @@ class _DashboardPageState extends State<DashboardPage> {
         }
 
         if (snapshot.hasError) {
-          print(
+          debugPrint(
               '[DASHBOARD] [FIRESTORE_READ_ERROR] Error al leer tareas de Firestore: ${snapshot.error}');
         }
 
@@ -617,8 +822,8 @@ class _DashboardPageState extends State<DashboardPage> {
                           }
                           return Text(
                             'Hola, $name',
-                            style: const TextStyle(
-                                color: Colors.white,
+                            style: TextStyle(
+                                color: _textColor,
                                 fontSize: 28,
                                 fontWeight: FontWeight.bold),
                           );
@@ -635,12 +840,22 @@ class _DashboardPageState extends State<DashboardPage> {
                       ),
                     ],
                   ),
-                  Image.asset(
-                    'assets/logo/icon.png',
-                    height: 64,
-                    width: 64,
-                    errorBuilder: (_, __, ___) =>
-                        Icon(Icons.star, color: _gold, size: 32),
+                  Row(
+                    children: [
+                      IconButton(
+                        tooltip: 'Ver tutorial',
+                        onPressed: _startManualTutorial,
+                        icon: Icon(Icons.help_outline_rounded, color: _gold),
+                      ),
+                      const SizedBox(width: 4),
+                      Image.asset(
+                        'assets/logo/icon.png',
+                        height: 64,
+                        width: 64,
+                        errorBuilder: (_, __, ___) =>
+                            Icon(Icons.star, color: _gold, size: 32),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -681,8 +896,8 @@ class _DashboardPageState extends State<DashboardPage> {
       children: [
         Text(
           title,
-          style: const TextStyle(
-              color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+          style: TextStyle(
+              color: _textColor, fontSize: 18, fontWeight: FontWeight.bold),
         ),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -692,8 +907,8 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
           child: Text(
             count.toString(),
-            style: const TextStyle(
-                color: Colors.white70,
+            style: TextStyle(
+                color: _mutedTextColor,
                 fontSize: 12,
                 fontWeight: FontWeight.bold),
           ),
@@ -791,7 +1006,9 @@ class _DashboardPageState extends State<DashboardPage> {
                       color: isCompleted ? _gold : Colors.transparent,
                     ),
                     child: isCompleted
-                        ? const Icon(Icons.check, size: 16, color: Colors.black)
+                        ? Icon(Icons.check,
+                            size: 16,
+                            color: Theme.of(context).colorScheme.onPrimary)
                         : null,
                   ),
                 ),
@@ -810,7 +1027,7 @@ class _DashboardPageState extends State<DashboardPage> {
                           child: Text(
                             title,
                             style: TextStyle(
-                              color: Colors.white,
+                              color: _textColor,
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
                               decoration: isCompleted
@@ -825,10 +1042,10 @@ class _DashboardPageState extends State<DashboardPage> {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
-                              color: Colors.amber.withOpacity(0.15),
+                              color: Colors.amber.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(
-                                  color: Colors.amber.withOpacity(0.4),
+                                  color: Colors.amber.withValues(alpha: 0.4),
                                   width: 1),
                             ),
                             child: const Row(
@@ -874,8 +1091,9 @@ class _DashboardPageState extends State<DashboardPage> {
                       const SizedBox(height: 4),
                       Text(
                         description,
-                        style: const TextStyle(
-                            color: Colors.white38, fontSize: 12),
+                        style: TextStyle(
+                            color: _mutedTextColor.withValues(alpha: 0.65),
+                            fontSize: 12),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -894,28 +1112,31 @@ class _DashboardPageState extends State<DashboardPage> {
                         Flexible(
                           child: Text(
                             materia,
-                            style: const TextStyle(
-                                color: Colors.white70, fontSize: 12),
+                            style:
+                                TextStyle(color: _mutedTextColor, fontSize: 12),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         if (timeStr.isNotEmpty) ...[
                           const SizedBox(width: 10),
-                          const Icon(Icons.access_time,
-                              color: Colors.white54, size: 12),
+                          Icon(Icons.access_time,
+                              color: _mutedTextColor, size: 12),
                           const SizedBox(width: 3),
                           Text(timeStr,
-                              style: const TextStyle(
-                                  color: Colors.white54, fontSize: 12)),
+                              style: TextStyle(
+                                  color: _mutedTextColor, fontSize: 12)),
                         ],
                         if (subtasks.isNotEmpty) ...[
                           const SizedBox(width: 10),
-                          const Icon(Icons.checklist_rounded,
-                              color: Colors.white38, size: 13),
+                          Icon(Icons.checklist_rounded,
+                              color: _mutedTextColor.withValues(alpha: 0.65),
+                              size: 13),
                           const SizedBox(width: 3),
                           Text('$subtasksDone/${subtasks.length}',
-                              style: const TextStyle(
-                                  color: Colors.white38, fontSize: 12)),
+                              style: TextStyle(
+                                  color:
+                                      _mutedTextColor.withValues(alpha: 0.65),
+                                  fontSize: 12)),
                         ],
                       ],
                     ),
@@ -926,10 +1147,11 @@ class _DashboardPageState extends State<DashboardPage> {
               if (!isCompleted)
                 GestureDetector(
                   onTap: () => _startPomodoro(context, title),
-                  child: const Padding(
+                  child: Padding(
                     padding: EdgeInsets.only(left: 4, top: 2),
                     child: Icon(Icons.play_arrow_rounded,
-                        color: Colors.white38, size: 24),
+                        color: _mutedTextColor.withValues(alpha: 0.65),
+                        size: 24),
                   ),
                 ),
             ],
@@ -941,6 +1163,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Widget _buildAIBanner() {
     return Container(
+      key: _scanNotesKey,
       margin: const EdgeInsets.only(top: 15, bottom: 20),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
@@ -955,7 +1178,7 @@ class _DashboardPageState extends State<DashboardPage> {
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF673AB7).withOpacity(0.3),
+            color: const Color(0xFF673AB7).withValues(alpha: 0.3),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
