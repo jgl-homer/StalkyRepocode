@@ -139,9 +139,20 @@ class _TutorialOverlayState extends State<TutorialOverlay>
     final cardWidth = math.min(size.width - (margin * 2), 330.0);
     const mascotSize = 104.0;
     final cardLeft = (size.width - cardWidth) / 2;
-    final cardTop = (size.height * 0.51).clamp(
-      margin + mascotSize + 10,
-      size.height - cardHeight - 118,
+    final minCardTop = margin + mascotSize + 10;
+    final maxCardTop = size.height - cardHeight - margin;
+    final fallbackCardTop = (size.height * 0.51).clamp(
+      minCardTop,
+      maxCardTop,
+    );
+    final cardTop = _cardTopForTarget(
+      fallbackTop: fallbackCardTop,
+      minTop: minCardTop,
+      maxTop: maxCardTop,
+      target: target,
+      cardHeight: cardHeight,
+      mascotSize: mascotSize,
+      screenHeight: size.height,
     );
 
     final cardRect = Rect.fromLTWH(cardLeft, cardTop, cardWidth, cardHeight);
@@ -156,6 +167,33 @@ class _TutorialOverlayState extends State<TutorialOverlay>
       cardRect: cardRect,
       mascotRect: mascotRect,
     );
+  }
+
+  double _cardTopForTarget({
+    required double fallbackTop,
+    required double minTop,
+    required double maxTop,
+    required Rect? target,
+    required double cardHeight,
+    required double mascotSize,
+    required double screenHeight,
+  }) {
+    if (target == null) return fallbackTop;
+
+    const gap = 24.0;
+    final targetCenterY = target.center.dy;
+    final isBottomTarget = targetCenterY > screenHeight * 0.62;
+    final isTopTarget = targetCenterY < screenHeight * 0.38;
+
+    if (isBottomTarget) {
+      return (target.top - cardHeight - gap).clamp(minTop, maxTop);
+    }
+
+    if (isTopTarget) {
+      return (target.bottom + mascotSize + gap).clamp(minTop, maxTop);
+    }
+
+    return fallbackTop;
   }
 }
 

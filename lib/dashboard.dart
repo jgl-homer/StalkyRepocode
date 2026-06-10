@@ -47,6 +47,7 @@ class _DashboardPageState extends State<DashboardPage> {
   final GlobalKey _statsKpiKey = GlobalKey();
   final GlobalKey _settingsThemeKey = GlobalKey();
   late final TutorialController _tutorialController;
+  late final TutorialController _firstTaskTutorialController;
   bool _isVoiceListening = false;
   bool _isAiVoiceSaving = false;
 
@@ -56,12 +57,28 @@ class _DashboardPageState extends State<DashboardPage> {
   Color get _textColor => Theme.of(context).colorScheme.onSurface;
   Color get _mutedTextColor =>
       Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.62);
+  bool get _isTutorialActive =>
+      _tutorialController.isActive || _firstTaskTutorialController.isActive;
+  String? get _tutorialStepId =>
+      _tutorialController.currentStep?.id ??
+      _firstTaskTutorialController.currentStep?.id;
+  bool get _showTutorialFabs =>
+      !_isTutorialActive ||
+      _tutorialStepId == 'voice_button' ||
+      _tutorialStepId == 'add_button';
+  bool get _showTutorialBottomNavigation =>
+      !_isTutorialActive || _tutorialStepId == 'bottom_navigation';
 
   @override
   void initState() {
     super.initState();
     _tutorialController = TutorialController(steps: _buildTutorialSteps());
+    _firstTaskTutorialController = TutorialController(
+      steps: _buildFirstTaskTutorialSteps(),
+      completedPreferenceKey: 'stalky_first_task_tip_completed',
+    );
     _tutorialController.addListener(_syncTutorialTab);
+    _firstTaskTutorialController.addListener(_syncTutorialTab);
     _loadLocalTasks();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Future<void>.delayed(const Duration(milliseconds: 650), () {
@@ -75,7 +92,9 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   void dispose() {
     _tutorialController.removeListener(_syncTutorialTab);
+    _firstTaskTutorialController.removeListener(_syncTutorialTab);
     _tutorialController.dispose();
+    _firstTaskTutorialController.dispose();
     _voiceController.dispose();
     super.dispose();
   }
@@ -193,17 +212,36 @@ class _DashboardPageState extends State<DashboardPage> {
     ];
   }
 
+  List<TutorialStep> _buildFirstTaskTutorialSteps() {
+    return const [
+      TutorialStep(
+        id: 'first_task_created',
+        title: 'Primera tarea',
+        description:
+            '¡Listo! Ya creaste tu primera tarea. Yo te voy a ayudar a recordarla cuando se acerque la hora; desde aquí puedes tocarla para editarla o marcarla como completada.',
+        targetKey: null,
+        spriteAsset: 'assets/stalky/stalky_success.png',
+        stepNumber: 1,
+        tabIndex: 0,
+      ),
+    ];
+  }
+
   void _syncTutorialTab() {
     final targetTab = _tutorialController.currentStep?.tabIndex;
-    if (!_tutorialController.isActive ||
-        targetTab == null ||
-        targetTab == _selectedIndex) {
-      return;
-    }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || targetTab == _selectedIndex) return;
-      setState(() => _selectedIndex = targetTab);
+      if (!mounted) return;
+
+      final shouldChangeTab = _tutorialController.isActive &&
+          targetTab != null &&
+          targetTab != _selectedIndex;
+
+      setState(() {
+        if (shouldChangeTab) {
+          _selectedIndex = targetTab;
+        }
+      });
     });
   }
 
@@ -214,6 +252,21 @@ class _DashboardPageState extends State<DashboardPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _tutorialController.startTutorial();
+      }
+    });
+  }
+
+  void _showFirstTaskTutorialIfNeeded(Object? result) {
+    _loadLocalTasks();
+    if (result != true || _tutorialController.isActive) return;
+
+    if (_selectedIndex != 0) {
+      setState(() => _selectedIndex = 0);
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !_tutorialController.isActive) {
+        _firstTaskTutorialController.startTutorialIfNeeded();
       }
     });
   }
@@ -642,7 +695,7 @@ class _DashboardPageState extends State<DashboardPage> {
         Scaffold(
           backgroundColor: _bg,
           body: SafeArea(child: screens[_selectedIndex]),
-          floatingActionButton: _selectedIndex == 0
+          floatingActionButton: _selectedIndex == 0 && _showTutorialFabs
               ? Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -667,7 +720,7 @@ class _DashboardPageState extends State<DashboardPage> {
                           MaterialPageRoute(
                               builder: (context) =>
                                   const add_page.AddTaskPage()),
-                        ).then((_) => setState(() {}));
+                        ).then(_showFirstTaskTutorialIfNeeded);
                       },
                       backgroundColor: _gold,
                       shape: RoundedRectangleBorder(
@@ -681,45 +734,48 @@ class _DashboardPageState extends State<DashboardPage> {
                   ],
                 )
               : null,
-          bottomNavigationBar: Container(
-            key: _bottomNavigationKey,
-            child: Theme(
-              data: Theme.of(context).copyWith(
-                splashColor: Colors.transparent,
-                highlightColor: Colors.transparent,
-              ),
-              child: BottomNavigationBar(
-                backgroundColor: _bg,
-                selectedItemColor: _gold,
-                unselectedItemColor: _mutedTextColor,
-                showSelectedLabels: true,
-                showUnselectedLabels: true,
-                type: BottomNavigationBarType.fixed,
-                currentIndex: _selectedIndex,
-                onTap: (index) => setState(() => _selectedIndex = index),
-                items: const [
-                  BottomNavigationBarItem(
-                      icon: Icon(Icons.home_outlined),
-                      activeIcon: Icon(Icons.home),
-                      label: 'Inicio'),
-                  BottomNavigationBarItem(
-                      icon: Icon(Icons.calendar_today_outlined),
-                      activeIcon: Icon(Icons.calendar_today),
-                      label: 'Agenda'),
-                  BottomNavigationBarItem(
-                      icon: Icon(Icons.bar_chart_outlined),
-                      activeIcon: Icon(Icons.bar_chart),
-                      label: 'Stats'),
-                  BottomNavigationBarItem(
-                      icon: Icon(Icons.person_outline),
-                      activeIcon: Icon(Icons.person),
-                      label: 'Ajustes'),
-                ],
-              ),
-            ),
-          ),
+          bottomNavigationBar: _showTutorialBottomNavigation
+              ? Container(
+                  key: _bottomNavigationKey,
+                  child: Theme(
+                    data: Theme.of(context).copyWith(
+                      splashColor: Colors.transparent,
+                      highlightColor: Colors.transparent,
+                    ),
+                    child: BottomNavigationBar(
+                      backgroundColor: _bg,
+                      selectedItemColor: _gold,
+                      unselectedItemColor: _mutedTextColor,
+                      showSelectedLabels: true,
+                      showUnselectedLabels: true,
+                      type: BottomNavigationBarType.fixed,
+                      currentIndex: _selectedIndex,
+                      onTap: (index) => setState(() => _selectedIndex = index),
+                      items: const [
+                        BottomNavigationBarItem(
+                            icon: Icon(Icons.home_outlined),
+                            activeIcon: Icon(Icons.home),
+                            label: 'Inicio'),
+                        BottomNavigationBarItem(
+                            icon: Icon(Icons.calendar_today_outlined),
+                            activeIcon: Icon(Icons.calendar_today),
+                            label: 'Agenda'),
+                        BottomNavigationBarItem(
+                            icon: Icon(Icons.bar_chart_outlined),
+                            activeIcon: Icon(Icons.bar_chart),
+                            label: 'Stats'),
+                        BottomNavigationBarItem(
+                            icon: Icon(Icons.person_outline),
+                            activeIcon: Icon(Icons.person),
+                            label: 'Ajustes'),
+                      ],
+                    ),
+                  ),
+                )
+              : null,
         ),
         TutorialOverlay(controller: _tutorialController),
+        TutorialOverlay(controller: _firstTaskTutorialController),
       ],
     );
   }

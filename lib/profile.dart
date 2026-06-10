@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'delete_account.dart';
@@ -19,6 +20,9 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
+  static const String _supportEmail = 'Stalkyrecords@gmail.com';
+  static const MethodChannel _supportChannel = MethodChannel('stalky/support');
+
   final _formKey = GlobalKey<FormState>();
   final _auth = FirebaseAuth.instance;
   final _firestore = FirebaseFirestore.instance;
@@ -179,6 +183,48 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  Future<void> _copySupportEmail() async {
+    await Clipboard.setData(const ClipboardData(text: _supportEmail));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Correo de soporte copiado',
+          style: TextStyle(color: Theme.of(context).colorScheme.onPrimary),
+        ),
+        backgroundColor: _gold,
+      ),
+    );
+  }
+
+  Future<void> _openSupportEmail() async {
+    var opened = false;
+    try {
+      opened = await _supportChannel.invokeMethod<bool>(
+            'openSupportEmail',
+            {
+              'email': _supportEmail,
+              'subject': 'Soporte tecnico / sugerencias Stalky',
+            },
+          ) ??
+          false;
+    } on PlatformException {
+      opened = false;
+    }
+
+    if (opened || !mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'No se pudo abrir el correo. Puedes copiarlo abajo.',
+          style: TextStyle(color: Theme.of(context).colorScheme.onPrimary),
+        ),
+        backgroundColor: _gold,
+      ),
+    );
+  }
+
   InputDecoration _getInputDecoration(
     String label,
     IconData icon, {
@@ -336,6 +382,68 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildSupportCard() {
+    return _sectionCard(
+      title: 'Soporte y sugerencias',
+      icon: Icons.support_agent_outlined,
+      children: [
+        Text(
+          'Para soporte técnico o sugerencias, escríbenos a:',
+          style: TextStyle(color: _mutedTextColor, fontSize: 13, height: 1.35),
+        ),
+        const SizedBox(height: 12),
+        InkWell(
+          onTap: _openSupportEmail,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 13,
+            ),
+            decoration: BoxDecoration(
+              color: _bg,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: _gold.withValues(alpha: 0.28),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.mail_outline, color: _gold, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    _supportEmail,
+                    style: TextStyle(
+                      color: _textColor,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                Icon(Icons.open_in_new_rounded, color: _gold, size: 18),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        _buildButton(
+          text: 'Enviar correo',
+          icon: Icons.outgoing_mail,
+          onPressed: _openSupportEmail,
+        ),
+        const SizedBox(height: 10),
+        _buildButton(
+          text: 'Copiar correo',
+          bgColor: _bg,
+          textColor: _textColor,
+          icon: Icons.copy_outlined,
+          onPressed: _copySupportEmail,
+        ),
+      ],
     );
   }
 
@@ -539,6 +647,8 @@ class _ProfilePageState extends State<ProfilePage> {
                               ),
                             ],
                           ),
+                          const SizedBox(height: 18),
+                          _buildSupportCard(),
                         ],
                       ),
                     ),
