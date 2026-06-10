@@ -1,0 +1,33 @@
+workflows:
+  ios-release:
+    name: iOS Release
+    instance_type: mac_mini_m2
+
+    environment:
+      flutter: stable
+      xcode: latest
+
+    cache:
+      cache_paths:
+        - ~/.pub-cache
+
+    scripts:
+      - name: Flutter Clean
+        script: |
+          flutter clean
+
+      - name: Flutter Pub Get
+        script: |
+          flutter pub get
+
+      - name: Verify iOS Target
+        script: |
+          grep -R "13.0" ios || true
+          grep -R "IPHONEOS_DEPLOYMENT_TARGET" ios || true
+
+      - name: Build iOS
+        script: |
+          flutter build ios --release --no-codesign
+
+    artifacts:
+      - build/ios/iphoneos/*.app
