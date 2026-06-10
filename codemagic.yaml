@@ -1,33 +1,35 @@
 workflows:
-  ios-simulator:
-    name: iOS Simulator Build
-    instance_type: mac_mini_m2
+ios-simulator:
+name: iOS Simulator Build
+instance_type: mac_mini_m2
 
-    environment:
-      flutter: stable
-      xcode: latest
+```
+environment:
+  flutter: stable
+  xcode: latest
 
-    cache:
-      cache_paths:
-        - ~/.pub-cache
+cache:
+  cache_paths:
+    - ~/.pub-cache
 
-    scripts:
-      - name: Flutter Clean
-        script: |
-          flutter clean
+scripts:
+  - name: Flutter Clean
+    script: |
+      flutter clean
 
-      - name: Flutter Pub Get
-        script: |
-          flutter pub get
+  - name: Flutter Pub Get
+    script: |
+      flutter pub get
 
-      - name: Verify iOS Target
-        script: |
-          grep -R "13.0" ios || true
-          grep -R "IPHONEOS_DEPLOYMENT_TARGET" ios || true
+  - name: Verify iOS Target
+    script: |
+      grep -R "13.0" ios || true
+      grep -R "IPHONEOS_DEPLOYMENT_TARGET" ios || true
 
-      - name: Build iOS Simulator
-        script: |
-          flutter build ios --simulator
+  - name: Build iOS Simulator
+    script: |
+      flutter build ios --simulator --dart-define=STALKY_SIGNAL=$STALKY_SIGNAL
 
-    artifacts:
-      - build/ios/iphonesimulator/*.app
+artifacts:
+  - build/ios/iphonesimulator/*.app
+```
